@@ -91,11 +91,13 @@ func main() {
 
 	// 5. Proxy Gateway HTTP Tunnel Server
 	proxyServer := &http.Server{
-		Addr:         ":" + cfg.HTTPPort,
-		Handler:      gwServer,
-		ReadTimeout:  cfg.ReadTimeout,
-		WriteTimeout: cfg.WriteTimeout,
-		IdleTimeout:  cfg.IdleTimeout,
+		Addr:              ":" + cfg.HTTPPort,
+		Handler:           gwServer,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       cfg.ReadTimeout,
+		WriteTimeout:      cfg.WriteTimeout,
+		IdleTimeout:       cfg.IdleTimeout,
+		MaxHeaderBytes:    1 << 20, // 1MB header limit
 	}
 
 	go func() {

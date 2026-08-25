@@ -19,6 +19,8 @@ RUN apk add --no-cache ca-certificates tzdata
 
 COPY --from=builder /app/bin/api /app/api
 
+USER 65534:65534
+
 EXPOSE 8080
 
 ENTRYPOINT ["/app/api"]

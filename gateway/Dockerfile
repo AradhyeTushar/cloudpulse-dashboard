@@ -18,6 +18,8 @@ RUN apk add --no-cache ca-certificates
 COPY --from=builder /app/bin/gateway /app/gateway
 COPY config/ /app/config/
 
+USER 65534:65534
+
 EXPOSE 8000 9100 1080
 
 ENTRYPOINT ["/app/gateway"]

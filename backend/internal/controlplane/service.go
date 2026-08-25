@@ -3,6 +3,7 @@ package controlplane
 import (
 	"context"
 	"crypto/rand"
+	"crypto/subtle"
 	"encoding/hex"
 	"fmt"
 	"net"
@@ -92,16 +93,25 @@ func (s *ControlPlaneService) AuthorizeProxyRequest(ctx context.Context, req *Pr
 		return decision, nil
 	}
 
-	// Password validation
-	if matchedCred.PlainPassword != "" && matchedCred.PlainPassword != req.Password {
-		// Fallback to Argon2 verify
-		match, err := auth.VerifyPassword(req.Password, matchedCred.PasswordHash)
-		if err != nil || !match {
-			decision.Allowed = false
-			decision.StatusCode = 401
-			decision.Reason = "Invalid proxy password"
-			return decision, nil
+	// Constant-time password validation
+	valid := false
+	if matchedCred.PlainPassword != "" {
+		if subtle.ConstantTimeCompare([]byte(matchedCred.PlainPassword), []byte(req.Password)) == 1 {
+			valid = true
 		}
+	}
+	if !valid && matchedCred.PasswordHash != "" {
+		match, err := auth.VerifyPassword(req.Password, matchedCred.PasswordHash)
+		if err == nil && match {
+			valid = true
+		}
+	}
+
+	if !valid {
+		decision.Allowed = false
+		decision.StatusCode = 401
+		decision.Reason = "Invalid proxy credentials"
+		return decision, nil
 	}
 
 	if matchedCred.Status != "active" {
