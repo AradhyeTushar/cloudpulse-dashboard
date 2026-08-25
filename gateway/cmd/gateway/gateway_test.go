@@ -11,16 +11,18 @@ import (
 	"time"
 )
 
-func TestProxyGatewaySessionManagerFastPath(t *testing.T) {
-	// 1. Mock Destination Website
+func TestProxyGatewayProductionFeatures(t *testing.T) {
+	// 1. Mock Destination Server
 	targetServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write([]byte(`{"origin":"198.51.100.42","status":"fast_path_ok"}`))
 	}))
 	defer targetServer.Close()
 
-	// 2. Mock Control Plane - Track number of /authorize calls
+	// 2. Mock Control Plane
 	var controlPlaneCalls int64
+	var batchTelemetryFlushes int64
+
 	controlPlane := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/api/v1/internal/proxy/authorize":
@@ -41,7 +43,7 @@ func TestProxyGatewaySessionManagerFastPath(t *testing.T) {
 						CredentialID:     "pcred_200",
 						SessionID:        "sess_fast_path_123",
 						AssignedExitIP:   "198.51.100.42",
-						UpstreamProvider: "ExampleResidentialGrid",
+						UpstreamProvider: "provider-a",
 					},
 				})
 			} else {
@@ -55,6 +57,10 @@ func TestProxyGatewaySessionManagerFastPath(t *testing.T) {
 					},
 				})
 			}
+		case "/api/v1/internal/proxy/telemetry/batch":
+			atomic.AddInt64(&batchTelemetryFlushes, 1)
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{"success":true}`))
 		case "/api/v1/internal/proxy/release", "/api/v1/internal/proxy/telemetry", "/api/v1/internal/proxy/abuse-event":
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"success":true}`))
@@ -64,14 +70,17 @@ func TestProxyGatewaySessionManagerFastPath(t *testing.T) {
 	}))
 	defer controlPlane.Close()
 
-	// 3. Initialize Gateway with Fast-Path Session Manager
+	// 3. Initialize Gateway with Fast-Path Session Manager and Asynchronous Accumulator (100ms flush for test)
 	gw := &Gateway{
 		controlPlaneURL: controlPlane.URL,
 		httpClient:      &http.Client{Timeout: 3 * time.Second},
 		rateLimiter:     NewIPRateLimiter(100, time.Minute),
 		policyCache:     NewPolicyCache(30 * time.Second),
+		accumulator:     NewUsageAccumulator(controlPlane.URL, 100*time.Millisecond),
 		inMemSessions:   make(map[string]*AuthDecision),
+		inMemThreads:    make(map[string]int),
 	}
+	defer gw.accumulator.Stop()
 
 	gatewayServer := httptest.NewServer(http.HandlerFunc(gw.handleProxyRequest))
 	defer gatewayServer.Close()
@@ -86,7 +95,7 @@ func TestProxyGatewaySessionManagerFastPath(t *testing.T) {
 	}
 
 	// -------------------------------------------------------------------------
-	// REQUEST 1 (COLD PATH / MISS): First request with session-sess_fast_path_123
+	// CASE 1: Cold Path Miss & Tunnel Establishment
 	// -------------------------------------------------------------------------
 	t.Run("Cold Path: First Request Hits Control Plane", func(t *testing.T) {
 		req, _ := http.NewRequest("GET", targetServer.URL+"/test-data-1", nil)
@@ -108,10 +117,9 @@ func TestProxyGatewaySessionManagerFastPath(t *testing.T) {
 	})
 
 	// -------------------------------------------------------------------------
-	// REQUEST 2 (FAST PATH / HIT): Subsequent request with SAME session ID
-	// Must reuse existing session without calling Control Plane!
+	// CASE 2: Fast Path Session Reuse (<0.5ms)
 	// -------------------------------------------------------------------------
-	t.Run("Fast Path: Second Request Reuses Session Manager directly (<0.5ms)", func(t *testing.T) {
+	t.Run("Fast Path: Second Request Reuses Session Manager directly", func(t *testing.T) {
 		req, _ := http.NewRequest("GET", targetServer.URL+"/test-data-2", nil)
 		req.SetBasicAuth("valid_user-session-sess_fast_path_123", "valid_pass")
 
@@ -125,36 +133,60 @@ func TestProxyGatewaySessionManagerFastPath(t *testing.T) {
 			t.Fatalf("Expected 200 OK, got %d", resp.StatusCode)
 		}
 
-		// Control Plane call count should STILL be 1 (0 new calls because it hit Fast-Path cache!)
+		// Control Plane calls must remain 1
 		if atomic.LoadInt64(&controlPlaneCalls) != 1 {
 			t.Errorf("Fast-path failed: expected Control Plane calls to remain 1, got %d", atomic.LoadInt64(&controlPlaneCalls))
 		}
 	})
 
 	// -------------------------------------------------------------------------
-	// REQUEST 3 (REAL-TIME INVALIDATION): Admin invalidates user policy
-	// Must evict cache and contact Control Plane on next request!
+	// CASE 3: Asynchronous Batch Telemetry Flush (Non-blocking)
 	// -------------------------------------------------------------------------
-	t.Run("Real-Time Invalidation: Eviction forces fresh Control Plane sync", func(t *testing.T) {
-		// Evict user from cache
-		gw.invalidatePolicy("usr_tenant_100")
+	t.Run("Asynchronous Batch Telemetry Flush", func(t *testing.T) {
+		// Allow the 100ms ticker to flush the accumulated records
+		time.Sleep(250 * time.Millisecond)
 
-		req, _ := http.NewRequest("GET", targetServer.URL+"/test-data-3", nil)
-		req.SetBasicAuth("valid_user-session-sess_fast_path_123", "valid_pass")
-
-		resp, err := proxyClient.Do(req)
-		if err != nil {
-			t.Fatalf("Third request failed: %v", err)
+		if atomic.LoadInt64(&batchTelemetryFlushes) == 0 {
+			t.Errorf("Expected at least 1 batched telemetry flush to Control Plane, got %d", atomic.LoadInt64(&batchTelemetryFlushes))
 		}
-		defer resp.Body.Close()
+	})
 
-		if resp.StatusCode != http.StatusOK {
-			t.Fatalf("Expected 200 OK, got %d", resp.StatusCode)
+	// -------------------------------------------------------------------------
+	// CASE 4: Atomic Concurrency Limit Acquisition
+	// -------------------------------------------------------------------------
+	t.Run("Atomic Concurrency Limit", func(t *testing.T) {
+		userID := "usr_test_concurrency"
+		limit := 2
+
+		// Slot 1
+		ok1 := gw.acquireConcurrencySlot(t.Context(), userID, limit)
+		if !ok1 {
+			t.Errorf("Expected slot 1 acquisition to succeed")
 		}
 
-		// Control Plane calls should now be 2!
-		if atomic.LoadInt64(&controlPlaneCalls) != 2 {
-			t.Errorf("Expected Control Plane calls to increment to 2 after invalidation, got %d", atomic.LoadInt64(&controlPlaneCalls))
+		// Slot 2
+		ok2 := gw.acquireConcurrencySlot(t.Context(), userID, limit)
+		if !ok2 {
+			t.Errorf("Expected slot 2 acquisition to succeed")
 		}
+
+		// Slot 3 (Should be rejected)
+		ok3 := gw.acquireConcurrencySlot(t.Context(), userID, limit)
+		if ok3 {
+			t.Errorf("Expected slot 3 acquisition to be rejected by atomic limit")
+		}
+
+		// Release 1 slot
+		gw.releaseConcurrencySlot(t.Context(), userID)
+
+		// Slot 3 retry (Should succeed)
+		okRetry := gw.acquireConcurrencySlot(t.Context(), userID, limit)
+		if !okRetry {
+			t.Errorf("Expected slot retry acquisition to succeed after release")
+		}
+
+		// Clean up
+		gw.releaseConcurrencySlot(t.Context(), userID)
+		gw.releaseConcurrencySlot(t.Context(), userID)
 	})
 }

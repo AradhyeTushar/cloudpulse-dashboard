@@ -138,6 +138,7 @@ func main() {
 			r.Post("/authorize", controlPlaneHandler.Authorize)
 			r.Post("/release", controlPlaneHandler.Release)
 			r.Post("/telemetry", controlPlaneHandler.ReportTelemetry)
+			r.Post("/telemetry/batch", controlPlaneHandler.ReportBatchTelemetry)
 			r.Post("/abuse-event", controlPlaneHandler.ReportAbuse)
 		})
 
