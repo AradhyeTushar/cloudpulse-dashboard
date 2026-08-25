@@ -1,0 +1,409 @@
+/* Profile and Account Settings Styles matching Screenshots 1 - 5 */
+
+.profile-layout {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 2.5rem;
+  align-items: flex-start;
+}
+
+@media (max-width: 900px) {
+  .profile-layout {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+}
+
+/* Profile Left Sub-Sidebar */
+.profile-subnav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.profile-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.65rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.profile-nav-item:hover {
+  background: var(--bg-surface-hover);
+  color: var(--text-primary);
+}
+
+.profile-nav-item.active {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  font-weight: 700;
+  box-shadow: var(--shadow-xs);
+  border: 1px solid var(--border-subtle);
+}
+
+[data-theme="dark"] .profile-nav-item.active {
+  background: #161b22;
+  border-color: #30363d;
+}
+
+/* Main Profile Sections */
+.profile-section-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  margin-bottom: 1.75rem;
+  overflow: hidden;
+  box-shadow: var(--shadow-xs);
+}
+
+.profile-section-header {
+  padding: 1.5rem 1.75rem 1rem;
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.profile-section-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.profile-section-desc {
+  padding: 0 1.75rem 1rem;
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+/* Key-Value Settings Rows */
+.profile-row-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.profile-row-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.1rem 1.75rem;
+  border-top: 1px solid var(--border-subtle);
+  font-size: 0.85rem;
+  transition: background-color var(--transition-fast);
+}
+
+.profile-row-item:hover {
+  background-color: rgba(0, 0, 0, 0.01);
+}
+
+[data-theme="dark"] .profile-row-item:hover {
+  background-color: rgba(255, 255, 255, 0.015);
+}
+
+.profile-row-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+  width: 220px;
+  flex-shrink: 0;
+}
+
+.profile-row-value {
+  flex: 1;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
+.profile-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.profile-edit-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.profile-edit-btn:hover {
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+  background: var(--brand-primary-light);
+}
+
+.profile-delete-icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.profile-delete-icon-btn:hover {
+  border-color: #ef4444;
+  color: #ef4444;
+  background: #fef2f2;
+}
+
+/* Two-Factor Status Badge & Action */
+.tfa-disabled-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #ef4444;
+}
+
+/* Social Logins & Integrations Row */
+.social-integration-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem 1.75rem;
+}
+
+.social-left-info {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.social-logo-wrap {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+}
+
+.social-title-text {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.social-sub-text {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.status-enabled-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: #059669;
+}
+
+/* Two-Factor Authentication Setup Card (Screenshot 3) */
+.tfa-hero-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem 1.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.tfa-hero-left {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+}
+
+.tfa-shield-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.tfa-title-row {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.tfa-title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.tfa-off-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.15rem 0.55rem;
+  border-radius: var(--radius-full);
+  background: #ffe4e6;
+  color: #e11d48;
+}
+
+[data-theme="dark"] .tfa-off-badge {
+  background: #4c0519;
+  color: #fb7185;
+}
+
+.tfa-hero-desc {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+  margin-top: 0.25rem;
+  max-width: 650px;
+}
+
+.tfa-turnon-btn {
+  position: relative;
+  background: var(--brand-primary);
+  color: white;
+  padding: 0.6rem 1.5rem;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.875rem;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.tfa-turnon-btn:hover {
+  background: var(--brand-primary-hover);
+}
+
+.tfa-notification-pip {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 10px;
+  height: 10px;
+  background: #f43f5e;
+  border-radius: 50%;
+  border: 2px solid var(--bg-surface);
+}
+
+/* Account Activity Header (Screenshot 4) */
+.activity-banner-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem 1.75rem;
+  margin-bottom: 1.5rem;
+  box-shadow: var(--shadow-xs);
+}
+
+.activity-btn-outline {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 1.15rem;
+  border-radius: var(--radius-md);
+  background: transparent;
+  border: 1px solid rgba(92, 60, 246, 0.3);
+  color: var(--brand-primary-text);
+  font-weight: 600;
+  font-size: 0.8125rem;
+  cursor: pointer;
+  margin-top: 0.85rem;
+  transition: all var(--transition-fast);
+}
+
+.activity-btn-outline:hover {
+  background: var(--brand-primary-light);
+  border-color: var(--brand-primary);
+}
+
+/* Notifications Matrix Table (Screenshot 5) */
+.notifications-matrix-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.notifications-matrix-table th {
+  padding: 1rem 1.5rem;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  text-align: center;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.notifications-matrix-table th:first-child {
+  text-align: left;
+  width: 55%;
+}
+
+.notifications-matrix-table td {
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.notifications-matrix-table tr:last-child td {
+  border-bottom: none;
+}
+
+.notif-category-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.notif-category-desc {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  margin-top: 0.25rem;
+  line-height: 1.4;
+}
+
+.notif-checkbox-cell {
+  text-align: center;
+}
+
+.custom-notif-checkbox {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--brand-primary);
+  cursor: pointer;
+}
+
+.custom-notif-checkbox:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
