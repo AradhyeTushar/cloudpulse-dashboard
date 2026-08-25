@@ -1,0 +1,240 @@
+openapi: 3.1.0
+info:
+  title: CloudPulse API Control Plane
+  description: Next-generation Cloud Hosting, VPS Management, and Authentication API
+  version: 1.0.0
+servers:
+  - url: http://localhost:8080/api/v1
+    description: Local Development Server
+paths:
+  /auth/register:
+    post:
+      summary: Register a new tenant/user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, email, password]
+              properties:
+                name:
+                  type: string
+                  example: "Alex Mercer"
+                email:
+                  type: string
+                  format: email
+                  example: "alex.mercer@cloudinfra.io"
+                password:
+                  type: string
+                  format: password
+                  example: "SecurePass123!"
+      responses:
+        '201':
+          description: User successfully registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /auth/login:
+    post:
+      summary: Authenticate user with Argon2id password verification
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        '200':
+          description: Login successful, returns JWT bearer token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+
+  /user/profile:
+    get:
+      summary: Retrieve authenticated user profile
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: User profile details
+    put:
+      summary: Update user profile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                workspace_name:
+                  type: string
+      responses:
+        '200':
+          description: Updated user profile
+
+  /plans:
+    get:
+      summary: List all active hosting and VPS plans
+      responses:
+        '200':
+          description: Array of available VPS subscription tiers
+
+  /vps:
+    get:
+      summary: List VPS instances for authenticated user
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      responses:
+        '200':
+          description: List of VPS instances
+    post:
+      summary: Provision a new VPS server
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, plan_id, datacenter]
+              properties:
+                name:
+                  type: string
+                  example: "api-gateway-01"
+                hostname:
+                  type: string
+                  example: "api.domain.io"
+                plan_id:
+                  type: string
+                  example: "plan_kvm2"
+                datacenter:
+                  type: string
+                  example: "us-east-1"
+                os_image:
+                  type: string
+                  example: "ubuntu-24-04"
+      responses:
+        '201':
+          description: Provisioning initiated
+
+  /vps/{id}/action:
+    post:
+      summary: Trigger server action (start, stop, reboot, force_reboot)
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [action]
+              properties:
+                action:
+                  type: string
+                  enum: [start, stop, reboot, force_reboot]
+      responses:
+        '200':
+          description: Action received and queued
+
+  /vps/{id}/usage:
+    get:
+      summary: Query real-time CPU, RAM, Disk and bandwidth telemetry
+      security:
+        - BearerAuth: []
+        - ApiKeyAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Real-time telemetry series
+
+  /credentials:
+    get:
+      summary: List scoped API credentials
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: List of masked API keys
+    post:
+      summary: Generate a new random secret API key
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: "CI/CD Deployment Token"
+                scopes:
+                  type: array
+                  items:
+                    type: string
+                  example: ["vps:read", "vps:deploy"]
+      responses:
+        '201':
+          description: API key created with plain text secret shown once
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    ApiKeyAuth:
+      type: http
+      scheme: bearer
+      description: API Key starting with cp_live_
+  schemas:
+    AuthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            token:
+              type: string
+            expires_at:
+              type: string
+              format: date-time
+            user:
+              type: object
