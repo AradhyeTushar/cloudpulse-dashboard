@@ -13,22 +13,22 @@ import (
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/auth"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/credentials"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/plans"
+	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/providers"
+	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/providers/example"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/sessions"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/users"
 )
 
 type ControlPlaneService struct {
-	userRepo       users.Repository
-	credRepo       credentials.Repository
-	plansService   *plans.Service
-	sessionService *sessions.Service
+	userRepo         users.Repository
+	credRepo         credentials.Repository
+	plansService     *plans.Service
+	sessionService   *sessions.Service
+	providerRegistry *providers.Registry
 
 	// Thread tracking (in-memory & Redis sync)
-	mu             sync.Mutex
-	activeThreads  map[string]int // userID -> active count
-
-	// Mock upstream pool registry
-	upstreamNodes  map[string][]UpstreamNode
+	mu            sync.Mutex
+	activeThreads map[string]int // userID -> active count
 }
 
 func NewService(
@@ -37,30 +37,17 @@ func NewService(
 	plansService *plans.Service,
 	sessionService *sessions.Service,
 ) *ControlPlaneService {
-	s := &ControlPlaneService{
-		userRepo:       userRepo,
-		credRepo:       credRepo,
-		plansService:   plansService,
-		sessionService: sessionService,
-		activeThreads:  make(map[string]int),
-		upstreamNodes:  make(map[string][]UpstreamNode),
-	}
-	s.seedUpstreamNodes()
-	return s
-}
+	registry := providers.NewRegistry()
+	// Register Provider Adapter
+	registry.Register(example.NewProvider())
 
-func (s *ControlPlaneService) seedUpstreamNodes() {
-	s.upstreamNodes["residential"] = []UpstreamNode{
-		{ID: "node_res_us_1", Provider: "BrightData / Oxylabs PeerGrid", Type: "residential", Country: "United States", ExitIP: "198.51.100.42", Host: "egress-res-us1.cloudpulse.net", Port: 8080, Latency: 18, Healthy: true},
-		{ID: "node_res_de_1", Provider: "Telekom Residential Grid", Type: "residential", Country: "Germany", ExitIP: "198.51.100.88", Host: "egress-res-de1.cloudpulse.net", Port: 8080, Latency: 24, Healthy: true},
-		{ID: "node_res_gb_1", Provider: "Vodafone UK Grid", Type: "residential", Country: "United Kingdom", ExitIP: "198.51.100.112", Host: "egress-res-gb1.cloudpulse.net", Port: 8080, Latency: 22, Healthy: true},
-	}
-	s.upstreamNodes["datacenter"] = []UpstreamNode{
-		{ID: "node_dc_us_1", Provider: "Equinix Ashburn Tier 1", Type: "datacenter", Country: "United States", ExitIP: "203.0.113.15", Host: "egress-dc-us1.cloudpulse.net", Port: 8080, Latency: 6, Healthy: true},
-		{ID: "node_dc_eu_1", Provider: "Hetzner Frankfurt Tier 1", Type: "datacenter", Country: "Germany", ExitIP: "203.0.113.89", Host: "egress-dc-de1.cloudpulse.net", Port: 8080, Latency: 9, Healthy: true},
-	}
-	s.upstreamNodes["mobile"] = []UpstreamNode{
-		{ID: "node_mb_us_1", Provider: "Verizon 5G Gateway", Type: "mobile", Country: "United States", ExitIP: "192.0.2.77", Host: "egress-mb-us1.cloudpulse.net", Port: 8080, Latency: 35, Healthy: true},
+	return &ControlPlaneService{
+		userRepo:         userRepo,
+		credRepo:         credRepo,
+		plansService:     plansService,
+		sessionService:   sessionService,
+		providerRegistry: registry,
+		activeThreads:    make(map[string]int),
 	}
 }
 
@@ -148,9 +135,8 @@ func (s *ControlPlaneService) AuthorizeProxyRequest(ctx context.Context, req *Pr
 	// -------------------------------------------------------------------------
 	// 3. PLAN & BANDWIDTH QUOTA VERIFICATION
 	// -------------------------------------------------------------------------
-	// Determine plan limits (default 500GB / 500 threads)
 	threadsLimit := 500
-	var remainingQuotaBytes int64 = 500 * 1024 * 1024 * 1024 // 500GB in bytes
+	var remainingQuotaBytes int64 = 500 * 1024 * 1024 * 1024 // 500GB
 
 	subs, err := s.plansService.ListSubscriptions(ctx, user.ID)
 	if err == nil && len(subs) > 0 {
@@ -205,7 +191,6 @@ func (s *ControlPlaneService) AuthorizeProxyRequest(ctx context.Context, req *Pr
 		targetCountry = "United States"
 	}
 
-	// Sanctioned / blocked list check
 	blockedCountries := map[string]bool{"North Korea": true, "Syria": true, "Iran": true}
 	if blockedCountries[targetCountry] {
 		decision.Allowed = false
@@ -230,49 +215,65 @@ func (s *ControlPlaneService) AuthorizeProxyRequest(ctx context.Context, req *Pr
 	s.mu.Unlock()
 
 	// -------------------------------------------------------------------------
-	// 7. SESSION & EXIT IP RESOLUTION (STICKY VS ROTATING)
-	// -------------------------------------------------------------------------
-	var sessionID string
-	var assignedExitIP string
-
-	if matchedCred.RotationMode == "sticky" {
-		// Allocate or reuse sticky session
-		sessionID = fmt.Sprintf("sess_%s_%s", user.ID[:6], generateRandomHex(4))
-		assignedExitIP = "198.51.100." + fmt.Sprintf("%d", (time.Now().UnixNano()%200)+20)
-	} else {
-		// Rotating fresh IP per connection
-		sessionID = fmt.Sprintf("rot_%s", generateRandomHex(6))
-		assignedExitIP = fmt.Sprintf("203.0.113.%d", (time.Now().UnixNano()%220)+10)
-	}
-
-	decision.SessionID = sessionID
-	decision.AssignedExitIP = assignedExitIP
-
-	// -------------------------------------------------------------------------
-	// 8. PROVIDER ABSTRACTION SELECTION
+	// 7. PROVIDER ADAPTER SELECTION (Step 10 Architectural Seam)
 	// -------------------------------------------------------------------------
 	poolType := matchedCred.ProxyType
 	if poolType == "" {
 		poolType = "residential"
 	}
 
-	nodes := s.upstreamNodes[poolType]
-	if len(nodes) == 0 {
-		nodes = s.upstreamNodes["residential"]
+	provider, err := s.providerRegistry.SelectBestProvider(ctx, poolType)
+	if err != nil {
+		decision.Allowed = false
+		decision.StatusCode = 503
+		decision.Reason = "No upstream provider available: " + err.Error()
+		return decision, nil
 	}
 
-	selectedNode := nodes[0]
-	for _, n := range nodes {
-		if strings.EqualFold(n.Country, targetCountry) && n.Healthy {
-			selectedNode = n
-			break
-		}
+	// -------------------------------------------------------------------------
+	// 8. REDIS SESSION & EXIT IP RESOLUTION (Step 9 Redis Sessions)
+	// -------------------------------------------------------------------------
+	sessionID := req.TargetHost
+	if matchedCred.RotationMode == "sticky" {
+		sessionID = fmt.Sprintf("sess_%s_%s", user.ID[:6], generateRandomHex(4))
+	} else {
+		sessionID = fmt.Sprintf("rot_%s", generateRandomHex(6))
 	}
+
+	// Request proxy allocation from the provider adapter
+	proxyAlloc, err := provider.GetProxy(ctx, &providers.ProxyRequest{
+		Country:        targetCountry,
+		Type:           poolType,
+		SessionID:      sessionID,
+		RotationPolicy: matchedCred.RotationMode,
+		DurationMin:    matchedCred.SessionDurationMin,
+	})
+	if err != nil {
+		decision.Allowed = false
+		decision.StatusCode = 502
+		decision.Reason = "Provider failed to allocate proxy: " + err.Error()
+		return decision, nil
+	}
+
+	// Persist/Sync Session into Redis (Step 9)
+	proxySess, _, _ := s.sessionService.GetOrCreateProxySession(ctx, sessions.GetOrCreateSessionParams{
+		SessionID:      sessionID,
+		UserID:         user.ID,
+		Country:        targetCountry,
+		Provider:       provider.Name(),
+		ExitIP:         proxyAlloc.ExitIP,
+		Host:           proxyAlloc.Host,
+		Port:           proxyAlloc.Port,
+		RotationPolicy: matchedCred.RotationMode,
+		DurationMin:    matchedCred.SessionDurationMin,
+	})
 
 	decision.Allowed = true
 	decision.StatusCode = 200
-	decision.UpstreamProvider = selectedNode.Provider
-	decision.UpstreamHost = fmt.Sprintf("%s:%d", selectedNode.Host, selectedNode.Port)
+	decision.SessionID = proxySess.SessionID
+	decision.AssignedExitIP = proxySess.ExitIP
+	decision.UpstreamProvider = proxySess.Provider
+	decision.UpstreamHost = fmt.Sprintf("%s:%d", proxySess.Host, proxySess.Port)
 
 	return decision, nil
 }
