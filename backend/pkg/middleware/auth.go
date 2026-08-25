@@ -60,3 +60,31 @@ func Authenticator(tokenService *auth.TokenService, credService *credentials.Ser
 		})
 	}
 }
+
+// RequireRole enforces strict Role-Based Access Control on routes
+func RequireRole(allowedRoles ...string) func(next http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			claims, ok := r.Context().Value("claims").(*auth.Claims)
+			if !ok || claims == nil {
+				response.Unauthorized(w, "Authentication required")
+				return
+			}
+
+			allowed := false
+			for _, role := range allowedRoles {
+				if strings.EqualFold(claims.Role, role) {
+					allowed = true
+					break
+				}
+			}
+
+			if !allowed {
+				response.Forbidden(w, "Access forbidden: insufficient role permissions")
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}

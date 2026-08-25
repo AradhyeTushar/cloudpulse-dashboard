@@ -215,8 +215,9 @@ func main() {
 			// Audit Logs
 			r.Get("/audit/logs", auditHandler.List)
 
-			// Admin Control Plane (Milestone 1)
+			// Admin Control Plane (Milestone 1) - Protected by Strict Role-Based RBAC
 			r.Route("/admin", func(r chi.Router) {
+				r.Use(middleware.RequireRole("admin", "owner"))
 				r.Get("/overview", adminHandler.GetOverview)
 				r.Get("/users", adminHandler.ListUsers)
 				r.Post("/users/{id}/status", adminHandler.ToggleUserStatus)

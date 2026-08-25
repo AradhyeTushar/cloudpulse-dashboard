@@ -24,6 +24,29 @@ const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) =
   return <>{children}</>;
 };
 
+// Strict Admin RBAC Route Wrapper
+const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, isAuthenticated, isLoading } = useAuth();
+  if (isLoading) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg-app)', color: 'var(--text-primary)' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '1rem' }}>
+          <div className="spinner" style={{ width: 32, height: 32, border: '3px solid var(--border-color)', borderTopColor: 'var(--brand-primary)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Verifying Authorization...</span>
+        </div>
+      </div>
+    );
+  }
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+  // Only users with 'admin' or 'owner' role can access admin portal
+  if (user?.role !== 'admin' && user?.role !== 'owner') {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+};
+
 // Auth Pages
 import { LoginPage } from './pages/auth/LoginPage';
 import { RegisterPage } from './pages/auth/RegisterPage';
@@ -122,15 +145,15 @@ export const App: React.FC = () => {
                 <Route path="/settings" element={<SettingsPage />} />
 
                 {/* =========================================================
-                    ADMIN PORTAL
+                    ADMIN PORTAL (Protected by AdminRoute RBAC)
                    ========================================================= */}
-                <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
-                <Route path="/admin/users" element={<AdminUsersPage />} />
-                <Route path="/admin/plans" element={<AdminPlansPage />} />
-                <Route path="/admin/providers" element={<AdminProvidersPage />} />
-                <Route path="/admin/sessions" element={<AdminSessionsPage />} />
-                <Route path="/admin/abuse" element={<AdminAbusePage />} />
-                <Route path="/admin/health" element={<AdminHealthPage />} />
+                <Route path="/admin" element={<AdminRoute><Navigate to="/admin/users" replace /></AdminRoute>} />
+                <Route path="/admin/users" element={<AdminRoute><AdminUsersPage /></AdminRoute>} />
+                <Route path="/admin/plans" element={<AdminRoute><AdminPlansPage /></AdminRoute>} />
+                <Route path="/admin/providers" element={<AdminRoute><AdminProvidersPage /></AdminRoute>} />
+                <Route path="/admin/sessions" element={<AdminRoute><AdminSessionsPage /></AdminRoute>} />
+                <Route path="/admin/abuse" element={<AdminRoute><AdminAbusePage /></AdminRoute>} />
+                <Route path="/admin/health" element={<AdminRoute><AdminHealthPage /></AdminRoute>} />
 
                 {/* =========================================================
                     VPS FLEET MANAGEMENT (Direct Access)
