@@ -163,6 +163,8 @@ func main() {
 		r.Post("/sign-in/email", userHandler.BetterAuthSignIn)
 		r.Post("/sign-up/email", userHandler.BetterAuthSignUp)
 		r.Post("/sign-in/social", userHandler.BetterAuthSignInSocial)
+		r.Get("/oauth/google", userHandler.GoogleOAuthRedirect)
+		r.Get("/callback/google", userHandler.GoogleOAuthCallback)
 		r.Post("/sign-out", userHandler.BetterAuthSignOut)
 		r.Get("/get-session", userHandler.BetterAuthGetSession)
 		r.Get("/session", userHandler.BetterAuthGetSession)

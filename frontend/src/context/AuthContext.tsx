@@ -48,6 +48,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [isLoading, setIsLoading] = useState(false);
 
+  // Check for OAuth callback parameters on mount (from Google Redirect)
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const oauthToken = params.get('token');
+    const oauthSuccess = params.get('oauth');
+
+    if (oauthToken) {
+      setToken(oauthToken);
+      localStorage.setItem(AUTH_TOKEN_KEY, oauthToken);
+      // Clean query params from URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   // Sync session on mount with Better Auth
   useEffect(() => {
     const syncBetterAuthSession = async () => {
@@ -221,53 +235,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const loginWithGoogle = async (): Promise<boolean> => {
     setIsLoading(true);
-    try {
-      const res = await fetch('/api/auth/sign-in/social', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ provider: 'google' }),
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        const jwtToken = data.token || data.session?.token;
-        const apiUser = data.user;
-        const authUser: AuthUser = {
-          id: apiUser.id || 'usr_google_live',
-          name: apiUser.name || 'Google User',
-          email: apiUser.email || 'user.google@gmail.com',
-          role: apiUser.role || 'owner',
-          workspaceName: `${apiUser.name || 'Google'}'s Workspace`,
-          status: 'active',
-          assignedPlan: 'pro-500gb',
-        };
-        setUser(authUser);
-        setToken(jwtToken);
-        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(authUser));
-        localStorage.setItem(AUTH_TOKEN_KEY, jwtToken);
-        setIsLoading(false);
-        return true;
-      }
-    } catch {
-      // Fallback
-    }
-
-    // Client-side fallback simulation for local/dev environment
-    const googleUser: AuthUser = {
-      id: 'usr_google_live',
-      name: 'Google Enterprise User',
-      email: 'alex.mercer@gmail.com',
-      role: 'owner',
-      workspaceName: 'Google Workspace',
-      status: 'active',
-      assignedPlan: 'pro-500gb',
-    };
-    const mockToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.google_oauth_mock_jwt_token';
-    setUser(googleUser);
-    setToken(mockToken);
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(googleUser));
-    localStorage.setItem(AUTH_TOKEN_KEY, mockToken);
-    setIsLoading(false);
+    const redirectURI = `${window.location.origin}/api/auth/callback/google`;
+    window.location.href = `/api/auth/oauth/google?redirect_uri=${encodeURIComponent(redirectURI)}`;
     return true;
   };
 
