@@ -4,16 +4,20 @@ import { ThemeProvider } from './context/ThemeContext';
 import { ToastProvider } from './context/ToastContext';
 import { DashboardLayout } from './components/layout/DashboardLayout';
 
-// Customer Portal Pages
-import { DashboardPage } from './pages/customer/DashboardPage';
-import { ProxyAccessPage } from './pages/customer/ProxyAccessPage';
-import { LocationsPage } from './pages/customer/LocationsPage';
-import { SessionsPage } from './pages/customer/SessionsPage';
-import { UsagePage } from './pages/customer/UsagePage';
-import { ApiPage } from './pages/customer/ApiPage';
-import { AccountPage } from './pages/customer/AccountPage';
+// Proxy Suite Pages
+import { ProxyDashboardPage } from './pages/proxy/ProxyDashboardPage';
+import { ProxyCredentialsPage } from './pages/proxy/ProxyCredentialsPage';
+import { ProxySessionsPage } from './pages/proxy/ProxySessionsPage';
+import { ProxyLocationsPage } from './pages/proxy/ProxyLocationsPage';
+import { ProxyUsagePage } from './pages/proxy/ProxyUsagePage';
+
+// Billing Page
 import { BillingLayoutPage } from './pages/billing/BillingLayoutPage';
-import { SettingsPage } from './pages/SettingsPage';
+
+// Account Suite Pages
+import { ProfilePage } from './pages/account/ProfilePage';
+import { ApiKeysPage } from './pages/account/ApiKeysPage';
+import { SecurityPage } from './pages/account/SecurityPage';
 
 // Admin Portal Pages
 import { AdminUsersPage } from './pages/admin/AdminUsersPage';
@@ -23,7 +27,8 @@ import { AdminSessionsPage } from './pages/admin/AdminSessionsPage';
 import { AdminAbusePage } from './pages/admin/AdminAbusePage';
 import { AdminHealthPage } from './pages/admin/AdminHealthPage';
 
-// VPS Management Legacy/Sub-routes
+// Legacy/Compatibility Pages
+import { SettingsPage } from './pages/SettingsPage';
 import { VpsListPage } from './pages/VpsListPage';
 import { VpsOverviewPage } from './pages/vps/VpsOverviewPage';
 import { VpsDockerAppsPage } from './pages/vps/VpsDockerAppsPage';
@@ -49,21 +54,41 @@ export const App: React.FC = () => {
           <Routes>
             <Route element={<DashboardLayout />}>
               {/* =========================================================
-                  CUSTOMER PORTAL ROUTES
+                  MAIN DASHBOARD & PROXY SUITE
                  ========================================================= */}
-              <Route path="/" element={<DashboardPage />} />
-              <Route path="/proxy-access" element={<ProxyAccessPage />} />
-              <Route path="/locations" element={<LocationsPage />} />
-              <Route path="/sessions" element={<SessionsPage />} />
-              <Route path="/usage" element={<UsagePage />} />
+              <Route path="/" element={<ProxyDashboardPage />} />
+              <Route path="/proxy" element={<Navigate to="/proxy/overview" replace />} />
+              <Route path="/proxy/overview" element={<ProxyDashboardPage />} />
+              <Route path="/proxy/credentials" element={<ProxyCredentialsPage />} />
+              <Route path="/proxy/sessions" element={<ProxySessionsPage />} />
+              <Route path="/proxy/locations" element={<ProxyLocationsPage />} />
+              <Route path="/proxy/usage" element={<ProxyUsagePage />} />
+
+              {/* Backwards compatibility aliases for customer portal */}
+              <Route path="/proxy-access" element={<Navigate to="/proxy/credentials" replace />} />
+              <Route path="/locations" element={<Navigate to="/proxy/locations" replace />} />
+              <Route path="/sessions" element={<Navigate to="/proxy/sessions" replace />} />
+              <Route path="/usage" element={<Navigate to="/proxy/usage" replace />} />
+              <Route path="/api" element={<Navigate to="/account/api-keys" replace />} />
+
+              {/* =========================================================
+                  BILLING
+                 ========================================================= */}
               <Route path="/billing" element={<BillingLayoutPage />} />
-              <Route path="/api" element={<ApiPage />} />
-              <Route path="/account" element={<AccountPage />} />
+
+              {/* =========================================================
+                  ACCOUNT SUITE
+                 ========================================================= */}
+              <Route path="/account" element={<Navigate to="/account/profile" replace />} />
+              <Route path="/account/profile" element={<ProfilePage />} />
+              <Route path="/account/api-keys" element={<ApiKeysPage />} />
+              <Route path="/account/security" element={<SecurityPage />} />
               <Route path="/settings" element={<SettingsPage />} />
 
               {/* =========================================================
-                  ADMIN PORTAL ROUTES
+                  ADMIN PORTAL
                  ========================================================= */}
+              <Route path="/admin" element={<Navigate to="/admin/users" replace />} />
               <Route path="/admin/users" element={<AdminUsersPage />} />
               <Route path="/admin/plans" element={<AdminPlansPage />} />
               <Route path="/admin/providers" element={<AdminProvidersPage />} />
@@ -72,7 +97,7 @@ export const App: React.FC = () => {
               <Route path="/admin/health" element={<AdminHealthPage />} />
 
               {/* =========================================================
-                  VPS FLEET MANAGEMENT
+                  VPS FLEET MANAGEMENT (Direct Access)
                  ========================================================= */}
               <Route path="/vps" element={<VpsListPage />} />
               <Route path="/vps/:id" element={<VpsOverviewPage />} />

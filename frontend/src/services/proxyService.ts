@@ -25,6 +25,15 @@ const ENDPOINTS_KEY = 'cloudpulse_proxy_endpoints';
 const SESSIONS_KEY = 'cloudpulse_proxy_sessions';
 const ADMIN_USERS_KEY = 'cloudpulse_admin_users';
 
+export type CreateEndpointDTO = Partial<Omit<ProxyEndpointConfig, 'id' | 'createdAt'>> & {
+  name: string;
+  proxyType: ProxyEndpointConfig['proxyType'];
+  protocol: ProxyEndpointConfig['protocol'];
+  rotationMode: ProxyEndpointConfig['rotationMode'];
+  country: string;
+  countryCode: string;
+};
+
 export const proxyService = {
   getEndpoints: (): ProxyEndpointConfig[] => {
     const saved = localStorage.getItem(ENDPOINTS_KEY);
@@ -39,13 +48,32 @@ export const proxyService = {
     }
   },
 
-  createEndpoint: (ep: Omit<ProxyEndpointConfig, 'id' | 'createdAt'>): ProxyEndpointConfig => {
+  createEndpoint: (dto: CreateEndpointDTO): ProxyEndpointConfig => {
     const list = proxyService.getEndpoints();
+    const host = dto.host || (dto.proxyType === 'datacenter' ? 'dc.cloudpulse.net' : 'pr.cloudpulse.net');
+    const port = dto.port || (dto.protocol === 'socks5' ? 1080 : 8000);
+    const username = dto.username || 'cp_' + Math.random().toString(36).substring(2, 8);
+    const password = dto.password || 'p_sec_' + Math.random().toString(36).substring(2, 10);
+
     const newEp: ProxyEndpointConfig = {
-      ...ep,
       id: 'ep_' + Math.random().toString(36).substring(2, 9),
+      name: dto.name,
+      proxyType: dto.proxyType,
+      protocol: dto.protocol,
+      host,
+      port,
+      username,
+      password,
+      rotationMode: dto.rotationMode,
+      sessionDurationMin: dto.sessionDurationMin || 10,
+      country: dto.country,
+      countryCode: dto.countryCode,
+      state: dto.state,
+      city: dto.city,
+      ipWhitelist: dto.ipWhitelist || [],
       createdAt: new Date().toISOString().split('T')[0],
     };
+
     const updated = [newEp, ...list];
     localStorage.setItem(ENDPOINTS_KEY, JSON.stringify(updated));
     return newEp;
@@ -76,14 +104,14 @@ export const proxyService = {
 
   rotateSessionIP: (sessionId: string): ProxyStickySession => {
     const sessions = proxyService.getStickySessions();
-    const newExitIP = `198.${Math.floor(Math.random() * 200)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
+    const randomIP = `${Math.floor(Math.random() * 180 + 20)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}.${Math.floor(Math.random() * 250)}`;
     const updated = sessions.map((s) => {
       if (s.id === sessionId) {
         return {
           ...s,
-          exitIP: newExitIP,
-          startedAt: 'Just now',
+          exitIP: randomIP,
           durationSeconds: 0,
+          startedAt: 'Just now',
         };
       }
       return s;
@@ -102,7 +130,7 @@ export const proxyService = {
     return MOCK_USAGE_STATS;
   },
 
-  // Admin Services
+  // Admin Features
   getAdminUsers: (): AdminUser[] => {
     const saved = localStorage.getItem(ADMIN_USERS_KEY);
     if (!saved) {
@@ -120,10 +148,8 @@ export const proxyService = {
     const users = proxyService.getAdminUsers();
     const updated = users.map((u) => {
       if (u.id === userId) {
-        return {
-          ...u,
-          status: (u.status === 'active' ? 'suspended' : 'active') as 'active' | 'suspended',
-        };
+        const nextStatus = u.status === 'active' ? 'suspended' : 'active';
+        return { ...u, status: nextStatus as 'active' | 'suspended' };
       }
       return u;
     });

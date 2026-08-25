@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
@@ -7,7 +7,7 @@ import {
   Radio,
   BarChart2,
   Receipt,
-  Code2,
+  Key,
   User,
   Users,
   Layers,
@@ -15,8 +15,11 @@ import {
   ShieldAlert,
   Activity,
   MoreHorizontal,
-  ArrowRightLeft,
+  ChevronDown,
+  ChevronRight,
   Shield,
+  ArrowRightLeft,
+  Lock,
 } from 'lucide-react';
 import { MOCK_USER } from '../../data/mock-user';
 
@@ -28,6 +31,10 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const navigate = useNavigate();
+
+  const [proxyOpen, setProxyOpen] = useState(true);
+  const [accountOpen, setAccountOpen] = useState(true);
+
   const isAdmin = location.pathname.startsWith('/admin');
 
   return (
@@ -77,7 +84,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
               <Shield size={14} />
-              <span>{isAdmin ? 'Admin Portal' : 'Customer Portal'}</span>
+              <span>{isAdmin ? 'Admin Mode' : 'Customer Mode'}</span>
             </div>
             <ArrowRightLeft size={12} />
           </button>
@@ -153,10 +160,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                CUSTOMER PORTAL NAVIGATION
                ================================================================= */
             <div className="nav-group">
-              <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Proxy & Cloud
-              </div>
-
+              {/* Dashboard */}
               <NavLink
                 to="/"
                 end
@@ -167,68 +171,129 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 <span>Dashboard</span>
               </NavLink>
 
-              <NavLink
-                to="/proxy-access"
-                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <Zap className="nav-item-icon" />
-                <span>Proxy Access</span>
-              </NavLink>
+              {/* PROXY SECTION */}
+              <div style={{ marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setProxyOpen(!proxyOpen)}
+                  className="nav-item"
+                  style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <Zap className="nav-item-icon" />
+                    <span style={{ fontWeight: 700 }}>Proxy</span>
+                  </div>
+                  {proxyOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
 
-              <NavLink
-                to="/locations"
-                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <Globe className="nav-item-icon" />
-                <span>Locations</span>
-              </NavLink>
+                {proxyOpen && (
+                  <div style={{ paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.1rem', marginTop: '0.2rem' }}>
+                    <NavLink
+                      to="/proxy/overview"
+                      className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                      onClick={onClose}
+                    >
+                      <LayoutDashboard size={14} className="nav-item-icon" />
+                      <span>Overview</span>
+                    </NavLink>
 
-              <NavLink
-                to="/sessions"
-                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <Radio className="nav-item-icon" />
-                <span>Sessions</span>
-              </NavLink>
+                    <NavLink
+                      to="/proxy/credentials"
+                      className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                      onClick={onClose}
+                    >
+                      <Key size={14} className="nav-item-icon" />
+                      <span>Credentials</span>
+                    </NavLink>
 
-              <NavLink
-                to="/usage"
-                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <BarChart2 className="nav-item-icon" />
-                <span>Usage</span>
-              </NavLink>
+                    <NavLink
+                      to="/proxy/sessions"
+                      className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                      onClick={onClose}
+                    >
+                      <Radio size={14} className="nav-item-icon" />
+                      <span>Sessions</span>
+                    </NavLink>
 
-              <NavLink
-                to="/billing"
-                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <Receipt className="nav-item-icon" />
-                <span>Billing</span>
-              </NavLink>
+                    <NavLink
+                      to="/proxy/locations"
+                      className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                      onClick={onClose}
+                    >
+                      <Globe size={14} className="nav-item-icon" />
+                      <span>Locations</span>
+                    </NavLink>
 
-              <NavLink
-                to="/api"
-                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <Code2 className="nav-item-icon" />
-                <span>API</span>
-              </NavLink>
+                    <NavLink
+                      to="/proxy/usage"
+                      className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                      onClick={onClose}
+                    >
+                      <BarChart2 size={14} className="nav-item-icon" />
+                      <span>Usage</span>
+                    </NavLink>
+                  </div>
+                )}
+              </div>
 
-              <NavLink
-                to="/account"
-                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-                onClick={onClose}
-              >
-                <User className="nav-item-icon" />
-                <span>Account</span>
-              </NavLink>
+              {/* BILLING */}
+              <div style={{ marginTop: '0.5rem' }}>
+                <NavLink
+                  to="/billing"
+                  className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                  onClick={onClose}
+                >
+                  <Receipt className="nav-item-icon" />
+                  <span>Billing</span>
+                </NavLink>
+              </div>
+
+              {/* ACCOUNT SECTION */}
+              <div style={{ marginTop: '0.5rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setAccountOpen(!accountOpen)}
+                  className="nav-item"
+                  style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                    <User className="nav-item-icon" />
+                    <span style={{ fontWeight: 700 }}>Account</span>
+                  </div>
+                  {accountOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+
+                {accountOpen && (
+                  <div style={{ paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.1rem', marginTop: '0.2rem' }}>
+                    <NavLink
+                      to="/account/profile"
+                      className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                      onClick={onClose}
+                    >
+                      <User size={14} className="nav-item-icon" />
+                      <span>Profile</span>
+                    </NavLink>
+
+                    <NavLink
+                      to="/account/api-keys"
+                      className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                      onClick={onClose}
+                    >
+                      <Key size={14} className="nav-item-icon" />
+                      <span>API Keys</span>
+                    </NavLink>
+
+                    <NavLink
+                      to="/account/security"
+                      className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                      onClick={onClose}
+                    >
+                      <Lock size={14} className="nav-item-icon" />
+                      <span>Security</span>
+                    </NavLink>
+                  </div>
+                )}
+              </div>
             </div>
           )}
         </div>
@@ -238,7 +303,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           <button
             className="user-profile-btn"
             onClick={() => {
-              navigate('/account');
+              navigate('/account/profile');
               onClose();
             }}
           >
