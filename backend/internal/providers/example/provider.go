@@ -21,11 +21,14 @@ type ExampleProvider struct {
 }
 
 // NewProvider initializes the provider adapter using environment variables
-func NewProvider() *ExampleProvider {
-	name := getEnv("EXAMPLE_PROVIDER_NAME", "ExampleResidentialGrid")
+func NewProvider(nameOverride string) *ExampleProvider {
+	name := nameOverride
+	if name == "" {
+		name = getEnv("EXAMPLE_PROVIDER_NAME", "provider-a")
+	}
 	pType := getEnv("EXAMPLE_PROVIDER_TYPE", "residential")
 	apiKey := getEnv("EXAMPLE_PROVIDER_API_KEY", "ep_key_live_default_demo_98a")
-	host := getEnv("EXAMPLE_PROVIDER_GATEWAY_HOST", "egress.example-provider.net")
+	host := getEnv("EXAMPLE_PROVIDER_GATEWAY_HOST", "egress.provider-network.net")
 	portStr := getEnv("EXAMPLE_PROVIDER_GATEWAY_PORT", "8080")
 	port, _ := strconv.Atoi(portStr)
 	if port == 0 {
@@ -50,20 +53,17 @@ func (p *ExampleProvider) Type() string {
 }
 
 // GetProxy allocates an upstream proxy based on requested country and session policy
-func (p *ExampleProvider) GetProxy(ctx context.Context, req *providers.ProxyRequest) (*providers.Allocation, error) {
+func (p *ExampleProvider) GetProxy(ctx context.Context, req *providers.ProxyRequest) (*providers.ProxyAllocation, error) {
 	country := req.Country
 	if country == "" {
 		country = "US"
 	}
 
-	durationMin := req.DurationMin
-	if durationMin <= 0 {
-		durationMin = 15
-	}
+	durationMin := 15
 
 	// Deterministically calculate exit IP based on country & session ID (or random for rotating)
 	var exitIP string
-	if req.RotationPolicy == "sticky" && req.SessionID != "" {
+	if req.Rotation == providers.RotationSticky && req.SessionID != "" {
 		hash := md5.Sum([]byte(fmt.Sprintf("%s-%s-%s", req.SessionID, country, p.name)))
 		hashHex := hex.EncodeToString(hash[:])
 		b1, _ := strconv.ParseInt(hashHex[0:2], 16, 64)
@@ -78,25 +78,23 @@ func (p *ExampleProvider) GetProxy(ctx context.Context, req *providers.ProxyRequ
 	username := fmt.Sprintf("customer-%s-country-%s-session-%s", p.apiKey[:8], country, req.SessionID)
 	password := "auth_" + p.apiKey
 
-	return &providers.Allocation{
-		ProviderID: p.name,
-		ExitIP:     exitIP,
-		Endpoint:   fmt.Sprintf("%s:%d", p.gatewayHost, p.gatewayPort),
-		Username:   username,
-		Password:   password,
-		Country:    country,
-		LatencyMs:  18,
-		ExpiresAt:  time.Now().Add(time.Duration(durationMin) * time.Minute),
+	return &providers.ProxyAllocation{
+		ProviderName: p.name,
+		Host:         p.gatewayHost,
+		Port:         p.gatewayPort,
+		Username:     username,
+		Password:     password,
+		Country:      country,
+		ExitIP:       exitIP,
+		ExpiresAt:    time.Now().Add(time.Duration(durationMin) * time.Minute),
 	}, nil
 }
 
-func (p *ExampleProvider) ReleaseProxy(ctx context.Context, allocation *providers.Allocation) error {
-	// In production, notify upstream provider of connection termination
+func (p *ExampleProvider) ReleaseProxy(ctx context.Context, allocation *providers.ProxyAllocation) error {
 	return nil
 }
 
 func (p *ExampleProvider) HealthCheck(ctx context.Context) (bool, int, error) {
-	// Provider ping check
 	return true, 18, nil
 }
 

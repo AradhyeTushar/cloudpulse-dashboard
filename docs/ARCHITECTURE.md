@@ -2,6 +2,8 @@
 
 CloudPulse separates the system strictly into the **Control Plane** (Management, Billing, Policy Enforcement, Quota & Session Decision Engine) and the **Data Plane** (High-throughput Proxy Tunneling & Egress Forwarding).
 
+The platform is designed exclusively for **authorized enterprise proxy access, data collection, and compliance-first HTTP client traffic**, backed by active abuse-prevention and Acceptable Use Policy (AUP) enforcement.
+
 ---
 
 ## 🏛️ Two-Tier Architecture
@@ -24,15 +26,15 @@ CloudPulse separates the system strictly into the **Control Plane** (Management,
              ▼                                               ▼
   ┌───────────────────────┐                       ┌───────────────────────┐
   │     PostgreSQL 16     │                       │        Redis 7        │
-  │  (11 Foundational     │                       │  (Live Sticky/Rotating│
+  │  (12 Standardized     │                       │  (Live Sticky/Rotating│
   │   Application Tables) │                       │   Sessions & Limits)  │
   └───────────────────────┘                       └───────────────────────┘
              │                                               │
              └───────────────────────┬───────────────────────┘
                                      ▼
                       ┌──────────────────────────────┐
-                      │     Provider Abstraction     │
-                      │  (Residential, DC, Mobile)   │
+                      │   Dynamic Provider Registry  │
+                      │   (provider-a / provider-b)  │
                       └──────────────────────────────┘
 
 ─────────────────────────────────────────────────────────────────────────────
@@ -40,17 +42,17 @@ CloudPulse separates the system strictly into the **Control Plane** (Management,
                                  DATA PLANE
 
                       ┌──────────────────────────────┐
-                      │  Customer Proxy Connection   │
-                      │  (HTTP / HTTPS / SOCKS5)     │
+                      │  Customer Client Application │
+                      │  (Applications / HTTP Client)│
                       └──────────────┬───────────────┘
                                      │
                                      ▼
                       ┌──────────────────────────────┐
                       │     Proxy Gateway (8000)     │
-                      │      (3proxy / Go Engine)    │
+                      │  (Fast-Path Policy & Cache)  │
                       └──────────────┬───────────────┘
                                      │
-                    Handshake & Policy Check (200 OK)
+                     Session Fast-Path / Handshake Check
                                      ▼
                       ┌──────────────────────────────┐
                       │     Redis / Session Policy   │
@@ -59,13 +61,20 @@ CloudPulse separates the system strictly into the **Control Plane** (Management,
                                      │
                                      ▼
                       ┌──────────────────────────────┐
-                      │     Provider Abstraction     │
+                      │   Dynamic Provider Registry  │
+                      │   (Primary ➔ Fallback Grid)  │
                       └──────────────┬───────────────┘
                                      │
                                      ▼
                       ┌──────────────────────────────┐
-                      │ Authorized Egress Provider   │
-                      │   (BrightData/Oxylabs/DC)    │
+                      │  Authorized Egress Provider  │
+                      │     (Residential / DC Grid)  │
+                      └──────────────┬───────────────┘
+                                     │
+                                     ▼
+                      ┌──────────────────────────────┐
+                      │        Target Website        │
+                      │        (The Internet)        │
                       └──────────────────────────────┘
 ```
 
@@ -73,13 +82,13 @@ CloudPulse separates the system strictly into the **Control Plane** (Management,
 
 ## 🔐 Control Plane Policy Decision Pipeline
 
-Before any proxy data stream is established by the Data Plane Gateway, the request traverses the 8-step Control Plane decision engine:
+Before any proxy data stream is established, the request traverses the 8-step Control Plane decision engine:
 
-1. **Customer**: Lookup tenant account.
-2. **Authentication**: Verify Basic Auth `username:password` or `cp_live_` token.
-3. **Plan**: Verify active subscription status and ensure remaining bandwidth quota > 0.
-4. **Credential**: Verify proxy credential is `active` and enforce client IP whitelist (CIDR).
-5. **Country Permissions**: Check compliance policy and target country routing privileges.
-6. **Connection Limit**: Atomically check active concurrent TCP streams against `threads_limit`.
-7. **Session Resolution**: Allocate or resume persistent sticky session or rotating exit IP.
-8. **Provider Abstraction**: Route to the lowest-latency, healthy upstream egress supplier.
+1. **Customer**: Lookup tenant account and verify `active` account status.
+2. **Authentication**: Verify Basic Auth `username:password` or API token against Argon2id hash.
+3. **Plan**: Verify active subscription status and remaining bandwidth quota.
+4. **Credential**: Verify proxy credential status and client IP CIDR whitelist.
+5. **Country Permissions**: Check target country routing privileges against compliance & sanction lists.
+6. **Connection Limit**: Atomically enforce concurrent stream limits (`threads_limit`).
+7. **Session Resolution**: Allocate or resume persistent sticky session (`Session`) in Redis.
+8. **Provider Routing**: Allocate internal `ProxyAllocation` from dynamic primary or fallback upstream supplier.

@@ -3,6 +3,7 @@ package providers
 import (
 	"context"
 	"errors"
+	"os"
 	"sync"
 	"time"
 )
@@ -12,47 +13,58 @@ var (
 	ErrProviderNotFound    = errors.New("requested provider not found")
 )
 
-// ProxyRequest contains requirements for allocating an upstream proxy node
+type RotationMode string
+
+const (
+	RotationSticky   RotationMode = "sticky"
+	RotationRotating RotationMode = "rotating"
+)
+
+// ProxyRequest contains explicit requirements for allocating an upstream proxy node
 type ProxyRequest struct {
-	Country        string `json:"country"`
-	State          string `json:"state,omitempty"`
-	City           string `json:"city,omitempty"`
-	Type           string `json:"type"` // residential, datacenter, mobile
-	SessionID      string `json:"session_id,omitempty"`
-	RotationPolicy string `json:"rotation_policy"` // sticky, rotating
-	DurationMin    int    `json:"duration_min,omitempty"`
+	Country   string       `json:"country"`
+	SessionID string       `json:"session_id"`
+	Rotation  RotationMode `json:"rotation"`
 }
 
-// Allocation represents the concrete upstream egress allocation produced by a provider
-type Allocation struct {
-	ProviderID string    `json:"provider_id"`
-	Endpoint   string    `json:"endpoint"` // e.g. "egress.example-provider.net:8080"
-	Country    string    `json:"country"`
-	ExitIP     string    `json:"exit_ip"`
-	ExpiresAt  time.Time `json:"expires_at"`
-	LatencyMs  int       `json:"latency_ms,omitempty"`
-	Username   string    `json:"username,omitempty"`
-	Password   string    `json:"password,omitempty"`
+// ProxyAllocation represents internal upstream provider runtime allocation attributes.
+// IMPORTANT: ProxyAllocation is strictly internal and must never be serialized into customer API responses.
+type ProxyAllocation struct {
+	ProviderName string    `json:"-"`
+	Host         string    `json:"-"`
+	Port         int       `json:"-"`
+	Username     string    `json:"-"`
+	Password     string    `json:"-"`
+	Country      string    `json:"-"`
+	ExitIP       string    `json:"-"`
+	ExpiresAt    time.Time `json:"-"`
 }
 
 // Provider is the common interface that all upstream proxy suppliers must implement
 type Provider interface {
 	Name() string
 	Type() string // residential, datacenter, mobile
-	GetProxy(ctx context.Context, req *ProxyRequest) (*Allocation, error)
-	ReleaseProxy(ctx context.Context, allocation *Allocation) error
+	GetProxy(ctx context.Context, req *ProxyRequest) (*ProxyAllocation, error)
+	ReleaseProxy(ctx context.Context, alloc *ProxyAllocation) error
 	HealthCheck(ctx context.Context) (bool, int, error) // isHealthy, latencyMs, error
 }
 
-// Registry manages and routes between multiple upstream providers
+// Registry manages dynamic routing and failover across multiple configured providers
 type Registry struct {
-	mu        sync.RWMutex
-	providers map[string]Provider
+	mu               sync.RWMutex
+	providers        map[string]Provider
+	primaryProvider  string
+	fallbackProvider string
 }
 
 func NewRegistry() *Registry {
+	primary := getEnv("PROVIDER_PRIMARY", "provider-a")
+	fallback := getEnv("PROVIDER_FALLBACK", "provider-b")
+
 	return &Registry{
-		providers: make(map[string]Provider),
+		providers:        make(map[string]Provider),
+		primaryProvider:  primary,
+		fallbackProvider: fallback,
 	}
 }
 
@@ -82,35 +94,50 @@ func (r *Registry) ListProviders() []Provider {
 	return list
 }
 
-// SelectBestProvider selects the lowest latency healthy provider matching the proxy type
-func (r *Registry) SelectBestProvider(ctx context.Context, proxyType string) (Provider, error) {
+// AllocateProxy routes the request to PRIMARY provider, failing over to FALLBACK provider if needed
+func (r *Registry) AllocateProxy(ctx context.Context, req *ProxyRequest) (*ProxyAllocation, Provider, error) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 
-	var bestProvider Provider
-	lowestLatency := 999999
-
-	for _, p := range r.providers {
-		if proxyType != "" && p.Type() != proxyType {
-			continue
-		}
-
-		healthy, latency, err := p.HealthCheck(ctx)
-		if err == nil && healthy {
-			if latency < lowestLatency {
-				lowestLatency = latency
-				bestProvider = p
+	// 1. Try Primary Provider
+	if p, exists := r.providers[r.primaryProvider]; exists {
+		healthy, _, _ := p.HealthCheck(ctx)
+		if healthy {
+			alloc, err := p.GetProxy(ctx, req)
+			if err == nil {
+				return alloc, p, nil
 			}
 		}
 	}
 
-	if bestProvider == nil {
-		// Fallback to any provider if none matched type
-		for _, p := range r.providers {
-			return p, nil
+	// 2. Try Fallback Provider
+	if fb, exists := r.providers[r.fallbackProvider]; exists {
+		healthy, _, _ := fb.HealthCheck(ctx)
+		if healthy {
+			alloc, err := fb.GetProxy(ctx, req)
+			if err == nil {
+				return alloc, fb, nil
+			}
 		}
-		return nil, ErrNoProviderAvailable
 	}
 
-	return bestProvider, nil
+	// 3. Try any available registered provider
+	for _, p := range r.providers {
+		healthy, _, _ := p.HealthCheck(ctx)
+		if healthy {
+			alloc, err := p.GetProxy(ctx, req)
+			if err == nil {
+				return alloc, p, nil
+			}
+		}
+	}
+
+	return nil, nil, ErrNoProviderAvailable
+}
+
+func getEnv(key, fallback string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return fallback
 }

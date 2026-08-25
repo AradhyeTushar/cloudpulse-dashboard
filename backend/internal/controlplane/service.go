@@ -38,8 +38,9 @@ func NewService(
 	sessionService *sessions.Service,
 ) *ControlPlaneService {
 	registry := providers.NewRegistry()
-	// Register Provider Adapter
-	registry.Register(example.NewProvider())
+	// Register dynamic providers (primary and fallback)
+	registry.Register(example.NewProvider("provider-a"))
+	registry.Register(example.NewProvider("provider-b"))
 
 	return &ControlPlaneService{
 		userRepo:         userRepo,
@@ -215,47 +216,31 @@ func (s *ControlPlaneService) AuthorizeProxyRequest(ctx context.Context, req *Pr
 	s.mu.Unlock()
 
 	// -------------------------------------------------------------------------
-	// 7. PROVIDER ADAPTER SELECTION (Step 10 Architectural Seam)
-	// -------------------------------------------------------------------------
-	poolType := matchedCred.ProxyType
-	if poolType == "" {
-		poolType = "residential"
-	}
-
-	provider, err := s.providerRegistry.SelectBestProvider(ctx, poolType)
-	if err != nil {
-		decision.Allowed = false
-		decision.StatusCode = 503
-		decision.Reason = "No upstream provider available: " + err.Error()
-		return decision, nil
-	}
-
-	// -------------------------------------------------------------------------
-	// 8. REDIS SESSION & PROVIDER ALLOCATION RESOLUTION
+	// 7 & 8. PROVIDER ALLOCATION & SESSION SYNCHRONIZATION
 	// -------------------------------------------------------------------------
 	sessionID := req.TargetHost
-	if matchedCred.RotationMode == "sticky" {
-		sessionID = fmt.Sprintf("sess_%s_%s", user.ID[:6], generateRandomHex(4))
-	} else {
+	rotMode := providers.RotationSticky
+	if matchedCred.RotationMode == "rotating" {
+		rotMode = providers.RotationRotating
 		sessionID = fmt.Sprintf("rot_%s", generateRandomHex(6))
+	} else if !strings.HasPrefix(sessionID, "sess_") {
+		sessionID = fmt.Sprintf("sess_%s_%s", user.ID[:6], generateRandomHex(4))
 	}
 
-	// Request proxy allocation from the provider adapter
-	alloc, err := provider.GetProxy(ctx, &providers.ProxyRequest{
-		Country:        targetCountry,
-		Type:           poolType,
-		SessionID:      sessionID,
-		RotationPolicy: matchedCred.RotationMode,
-		DurationMin:    matchedCred.SessionDurationMin,
+	// Request proxy allocation from the provider registry (with primary/fallback routing)
+	alloc, provider, err := s.providerRegistry.AllocateProxy(ctx, &providers.ProxyRequest{
+		Country:   targetCountry,
+		SessionID: sessionID,
+		Rotation:  rotMode,
 	})
 	if err != nil {
 		decision.Allowed = false
 		decision.StatusCode = 502
-		decision.Reason = "Provider failed to allocate proxy: " + err.Error()
+		decision.Reason = "Failed to allocate upstream proxy: " + err.Error()
 		return decision, nil
 	}
 
-	// Register / Sync Customer Session in Redis/DB (decoupled from exit IP)
+	// Register / Sync Customer Session in Redis/DB (decoupled from internal exit IP)
 	custSess, _, _ := s.sessionService.GetOrCreateSession(ctx, sessions.GetOrCreateSessionParams{
 		SessionID:         sessionID,
 		UserID:            user.ID,
@@ -271,8 +256,8 @@ func (s *ControlPlaneService) AuthorizeProxyRequest(ctx context.Context, req *Pr
 	decision.StatusCode = 200
 	decision.SessionID = custSess.ID
 	decision.AssignedExitIP = alloc.ExitIP
-	decision.UpstreamProvider = alloc.ProviderID
-	decision.UpstreamHost = alloc.Endpoint
+	decision.UpstreamProvider = alloc.ProviderName
+	decision.UpstreamHost = fmt.Sprintf("%s:%d", alloc.Host, alloc.Port)
 
 	return decision, nil
 }
