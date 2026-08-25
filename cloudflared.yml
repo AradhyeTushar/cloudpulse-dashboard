@@ -1,0 +1,13 @@
+tunnel: 1b1e0b51-e381-49a9-bb56-89a7788b4c46
+credentials-file: /etc/cloudflared/1b1e0b51-e381-49a9-bb56-89a7788b4c46.json
+
+ingress:
+  - hostname: cloudpulse.devtushar.uk
+    service: http://localhost:5173
+    originRequest:
+      httpHostHeader: localhost
+  - hostname: proxy.devtushar.uk
+    service: http://localhost:5173
+    originRequest:
+      httpHostHeader: localhost
+  - service: http://localhost:5173
