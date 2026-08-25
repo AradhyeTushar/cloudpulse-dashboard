@@ -1,52 +1,50 @@
-version: '3.8'
-
 services:
-  # 1. PostgreSQL Database
-  postgres:
-    image: postgres:16-alpine
-    container_name: cloudpulse-postgres
+  # 1. Reverse Proxy & TLS Termination
+  proxy-tls:
+    image: nginx:alpine
+    container_name: cloudpulse-tls
     restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/certs:/etc/nginx/certs:ro
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - cloudpulse-internal
+
+  # 2. CloudPulse High-Throughput Proxy Gateway
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: cloudpulse-gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgrespassword
-      POSTGRES_DB: cloudpulse
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ./migrations/000001_init_schema.up.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
+      GATEWAY_HTTP_PORT: "8000"
+      GATEWAY_METRICS_PORT: "9100"
+      CONTROL_PLANE_URL: "http://backend:8080"
+      REDIS_URL: "redis://redis:6379/0"
+    depends_on:
+      - backend
+      - redis
+    networks:
+      - cloudpulse-internal
 
-  # 2. Redis Session Store
-  redis:
-    image: redis:7-alpine
-    container_name: cloudpulse-redis
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
-  # 3. CloudPulse Go API Backend
+  # 3. CloudPulse Go API Backend (Internal)
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: cloudpulse-api
     restart: unless-stopped
-    ports:
-      - "8080:8080"
     environment:
-      ENV: development
+      ENV: production
       PORT: "8080"
       DATABASE_URL: postgres://postgres:postgrespassword@postgres:5432/cloudpulse?sslmode=disable
       REDIS_URL: redis://redis:6379/0
@@ -56,43 +54,74 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    networks:
+      - cloudpulse-internal
 
-  # 4. CloudPulse High-Throughput Proxy Gateway
-  gateway:
+  # 4. React Frontend (Internal)
+  frontend:
     build:
-      context: ./gateway
+      context: ./frontend
       dockerfile: Dockerfile
-    container_name: cloudpulse-gateway
+    container_name: cloudpulse-frontend
     restart: unless-stopped
-    ports:
-      - "8000:8000"
-      - "9100:9100"
-    environment:
-      GATEWAY_HTTP_PORT: "8000"
-      GATEWAY_METRICS_PORT: "9100"
     depends_on:
       - backend
+    networks:
+      - cloudpulse-internal
 
-  # 5. Prometheus Telemetry Engine
+  # 5. PostgreSQL Database (Strictly Internal)
+  postgres:
+    image: postgres:16-alpine
+    container_name: cloudpulse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: cloudpulse
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/000001_init_schema.up.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cloudpulse-internal
+
+  # 6. Redis Session Store (Strictly Internal)
+  redis:
+    image: redis:7-alpine
+    container_name: cloudpulse-redis
+    restart: unless-stopped
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cloudpulse-internal
+
+  # 7. Prometheus Telemetry Engine (Internal / Admin Network)
   prometheus:
     image: prom/prometheus:v2.51.0
     container_name: cloudpulse-prometheus
     restart: unless-stopped
-    ports:
-      - "9090:9090"
     volumes:
       - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     depends_on:
       - backend
       - gateway
+    networks:
+      - cloudpulse-internal
 
-  # 6. Grafana Operations Dashboards
+  # 8. Grafana Operations Dashboards (Internal / Admin Network)
   grafana:
     image: grafana/grafana:10.4.0
     container_name: cloudpulse-grafana
     restart: unless-stopped
-    ports:
-      - "3001:3000"
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
@@ -101,19 +130,12 @@ services:
       - grafana_data:/var/lib/grafana
     depends_on:
       - prometheus
+    networks:
+      - cloudpulse-internal
 
-  # 7. React Frontend
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-    container_name: cloudpulse-frontend
-    restart: unless-stopped
-    ports:
-      - "5173:80"
-      - "3000:80"
-    depends_on:
-      - backend
+networks:
+  cloudpulse-internal:
+    driver: bridge
 
 volumes:
   postgres_data:

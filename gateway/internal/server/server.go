@@ -250,6 +250,11 @@ func (s *GatewayServer) handleDirectProxy(w http.ResponseWriter, r *http.Request
 	outReq := r.Clone(r.Context())
 	outReq.RequestURI = ""
 
+	if decision != nil && decision.UpstreamHost != "" && !strings.Contains(decision.UpstreamHost, "cloudpulse.net") {
+		outReq.URL.Host = decision.UpstreamHost
+		outReq.Host = decision.UpstreamHost
+	}
+
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
 			Timeout:   s.cfg.DialTimeout,

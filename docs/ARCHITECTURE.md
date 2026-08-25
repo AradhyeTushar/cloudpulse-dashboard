@@ -6,76 +6,52 @@ The platform is designed exclusively for **authorized enterprise proxy access, d
 
 ---
 
-## 🏛️ Two-Tier Architecture
+## 🏛️ Production Network & Security Topology
 
 ```text
-                                CONTROL PLANE
-
-                      ┌──────────────────────────────┐
-                      │   React + TypeScript Frontend│
-                      │     (Customer & Admin UI)    │
-                      └──────────────┬───────────────┘
-                                     │
-                                     ▼
-                      ┌──────────────────────────────┐
-                      │    Go API Control Plane      │
-                      │         (Port 8080)          │
-                      └──────────────┬───────────────┘
-                                     │
-             ┌───────────────────────┴───────────────────────┐
-             ▼                                               ▼
-  ┌───────────────────────┐                       ┌───────────────────────┐
-  │     PostgreSQL 16     │                       │        Redis 7        │
-  │  (12 Standardized     │                       │  (Live Sticky/Rotating│
-  │   Application Tables) │                       │   Sessions & Limits)  │
-  └───────────────────────┘                       └───────────────────────┘
-             │                                               │
-             └───────────────────────┬───────────────────────┘
-                                     ▼
-                      ┌──────────────────────────────┐
-                      │   Dynamic Provider Registry  │
-                      │   (provider-a / provider-b)  │
-                      └──────────────────────────────┘
-
-─────────────────────────────────────────────────────────────────────────────
-
-                                 DATA PLANE
-
-                      ┌──────────────────────────────┐
-                      │  Customer Client Application │
-                      │  (Applications / HTTP Client)│
-                      └──────────────┬───────────────┘
-                                     │
-                                     ▼
-                      ┌──────────────────────────────┐
-                      │     Proxy Gateway (8000)     │
-                      │  (Fast-Path Policy & Cache)  │
-                      └──────────────┬───────────────┘
-                                     │
-                     Session Fast-Path / Handshake Check
-                                     ▼
-                      ┌──────────────────────────────┐
-                      │     Redis / Session Policy   │
-                      │   (Exit IP, Concurrency Cap) │
-                      └──────────────┬───────────────┘
-                                     │
-                                     ▼
-                      ┌──────────────────────────────┐
-                      │   Dynamic Provider Registry  │
-                      │   (Primary ➔ Fallback Grid)  │
-                      └──────────────┬───────────────┘
-                                     │
-                                     ▼
-                      ┌──────────────────────────────┐
-                      │  Authorized Egress Provider  │
-                      │     (Residential / DC Grid)  │
-                      └──────────────┬───────────────┘
-                                     │
-                                     ▼
-                      ┌──────────────────────────────┐
-                      │        Target Website        │
-                      │        (The Internet)        │
-                      └──────────────────────────────┘
+                                  PUBLIC INTERNET
+                                         │
+                        ┌────────────────┴────────────────┐
+                        │     TLS Termination / NGINX     │
+                        │         (Ports 80 & 443)        │
+                        └────────┬───────────────┬────────┘
+                                 │               │
+                     HTTPS / API │               │ Secure Proxy (:8000)
+                                 ▼               ▼
+                        ┌────────────────┐  ┌────────────────────────┐
+                        │ React Frontend │  │  Proxy Gateway (:8000) │
+                        │  & Go API      │  │  (Fast-Path Policy     │
+                        │  (:8080)       │  │   & CONNECT Engine)    │
+                        └────────┬───────┘  └───────────┬────────────┘
+                                 │                      │
+─────────────────────────────────┼──────────────────────┼───────────────────────
+                                 │ PRIVATE DOCKER BRIDGE│
+                                 ▼                      ▼
+                        ┌────────────────────────────────────────────┐
+                        │             INTERNAL INFRASTRUCTURE       │
+                        │                                            │
+                        │  • PostgreSQL 16 (12 Standardized Tables)  │
+                        │  • Redis 7 (Atomic Concurrency & Sessions) │
+                        │  • Prometheus (:9090) & Grafana (:3000)    │
+                        └──────────────────────┬─────────────────────┘
+                                               │
+                                               ▼
+                                ┌──────────────────────────────┐
+                                │   Dynamic Provider Registry  │
+                                │   (Primary ➔ Fallback Grid)  │
+                                └──────────────┬───────────────┘
+                                               │
+                                               ▼
+                                ┌──────────────────────────────┐
+                                │  Authorized Egress Provider  │
+                                │    (Mock / Residential Grid) │
+                                └──────────────┬───────────────┘
+                                               │
+                                               ▼
+                                ┌──────────────────────────────┐
+                                │        Target Website        │
+                                │        (The Internet)        │
+                                └──────────────────────────────┘
 ```
 
 ---
@@ -92,3 +68,11 @@ Before any proxy data stream is established, the request traverses the 8-step Co
 6. **Connection Limit**: Atomically enforce concurrent stream limits (`threads_limit`).
 7. **Session Resolution**: Allocate or resume persistent sticky session (`Session`) in Redis.
 8. **Provider Routing**: Allocate internal `ProxyAllocation` from dynamic primary or fallback upstream supplier.
+
+---
+
+## ⚡ Near-Real-Time Event Invalidation
+
+* **Security Propagation**: When an admin suspends a user, resets credentials, or disables an account, the Control Plane publishes an invalidation event on the Redis Pub/Sub channel `policy:invalidate`.
+* **Eviction**: All distributed Gateway edge nodes listen to `policy:invalidate` and evict corresponding cache entries, providing near-real-time policy-cache invalidation.
+* **Fail-Closed Guarantee**: Under dependency outages (e.g. Control Plane unreachable for an unknown client), the Gateway strictly rejects connections and never functions as an open proxy.
