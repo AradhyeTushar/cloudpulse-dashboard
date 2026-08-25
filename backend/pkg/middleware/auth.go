@@ -18,18 +18,25 @@ func Authenticator(tokenService *auth.TokenService, credService *credentials.Ser
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
-			if authHeader == "" {
+			tokenStr := ""
+
+			if authHeader != "" {
+				parts := strings.Split(authHeader, " ")
+				if len(parts) == 2 && strings.ToLower(parts[0]) == "bearer" {
+					tokenStr = parts[1]
+				}
+			}
+
+			if tokenStr == "" {
+				if cookie, err := r.Cookie("better-auth.session_token"); err == nil && cookie.Value != "" {
+					tokenStr = cookie.Value
+				}
+			}
+
+			if tokenStr == "" {
 				response.Unauthorized(w, "Missing Authorization header")
 				return
 			}
-
-			parts := strings.Split(authHeader, " ")
-			if len(parts) != 2 || strings.ToLower(parts[0]) != "bearer" {
-				response.Unauthorized(w, "Invalid Authorization header format. Expected 'Bearer <token>'")
-				return
-			}
-
-			tokenStr := parts[1]
 
 			// Case 1: Check if it's an API Key (starts with cp_live_)
 			if strings.HasPrefix(tokenStr, "cp_live_") && credService != nil {

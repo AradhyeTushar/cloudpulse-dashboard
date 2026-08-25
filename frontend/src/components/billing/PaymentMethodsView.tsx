@@ -12,6 +12,7 @@ import {
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface PaymentMethodItem {
   id: string;
@@ -24,6 +25,7 @@ interface PaymentMethodItem {
 
 export const PaymentMethodsView: React.FC = () => {
   const { showToast } = useToast();
+  const { token } = useAuth();
   const [addModalOpen, setAddModalOpen] = useState(false);
   const [selectedGateway, setSelectedGateway] = useState<'razorpay' | 'paypal' | 'card'>('razorpay');
   const [cardNumber, setCardNumber] = useState('');
@@ -55,11 +57,19 @@ export const PaymentMethodsView: React.FC = () => {
     e.preventDefault();
     setIsProcessing(true);
 
+    const authToken = token || localStorage.getItem('cloudpulse_auth_token') || '';
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
     try {
       if (selectedGateway === 'razorpay') {
         const res = await fetch('/api/v1/billing/razorpay/create-order', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ amount: 100, currency: 'INR', plan_id: 'verification' }),
         });
         const data = await res.json();
@@ -77,7 +87,7 @@ export const PaymentMethodsView: React.FC = () => {
       } else if (selectedGateway === 'paypal') {
         const res = await fetch('/api/v1/billing/paypal/create-order', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ amount: 1.00, currency: 'USD', plan_id: 'verification' }),
         });
         const data = await res.json();

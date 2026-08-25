@@ -19,6 +19,7 @@ import {
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 
 interface SubscriptionItem {
   id: string;
@@ -36,6 +37,7 @@ interface SubscriptionItem {
 
 export const SubscriptionsView: React.FC = () => {
   const { showToast } = useToast();
+  const { token } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSub, setSelectedSub] = useState<SubscriptionItem | null>(null);
   const [copiedId, setCopiedId] = useState(false);
@@ -115,11 +117,19 @@ export const SubscriptionsView: React.FC = () => {
     if (!checkoutSub) return;
     setIsProcessing(true);
 
+    const authToken = token || localStorage.getItem('cloudpulse_auth_token') || '';
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (authToken) {
+      headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
     try {
       if (selectedGateway === 'razorpay') {
         const res = await fetch('/api/v1/billing/razorpay/create-order', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ amount: 209900, currency: 'INR', plan_id: checkoutSub.id }),
         });
         const orderData = await res.json();
@@ -127,7 +137,7 @@ export const SubscriptionsView: React.FC = () => {
         // Verify order
         await fetch('/api/v1/billing/razorpay/verify-payment', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             razorpay_order_id: orderData?.data?.order_id || 'order_rzp_mock',
             razorpay_payment_id: `pay_rzp_${Date.now()}`,
@@ -140,14 +150,14 @@ export const SubscriptionsView: React.FC = () => {
       } else {
         const res = await fetch('/api/v1/billing/paypal/create-order', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({ amount: 29.00, currency: 'USD', plan_id: checkoutSub.id }),
         });
         const ppData = await res.json();
 
         await fetch('/api/v1/billing/paypal/capture-order', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers,
           body: JSON.stringify({
             order_id: ppData?.data?.order_id || 'PAYPAL-MOCK-ID',
             plan_id: checkoutSub.id,
