@@ -231,7 +231,7 @@ func (s *ControlPlaneService) AuthorizeProxyRequest(ctx context.Context, req *Pr
 	}
 
 	// -------------------------------------------------------------------------
-	// 8. REDIS SESSION & EXIT IP RESOLUTION (Step 9 Redis Sessions)
+	// 8. REDIS SESSION & PROVIDER ALLOCATION RESOLUTION
 	// -------------------------------------------------------------------------
 	sessionID := req.TargetHost
 	if matchedCred.RotationMode == "sticky" {
@@ -241,7 +241,7 @@ func (s *ControlPlaneService) AuthorizeProxyRequest(ctx context.Context, req *Pr
 	}
 
 	// Request proxy allocation from the provider adapter
-	proxyAlloc, err := provider.GetProxy(ctx, &providers.ProxyRequest{
+	alloc, err := provider.GetProxy(ctx, &providers.ProxyRequest{
 		Country:        targetCountry,
 		Type:           poolType,
 		SessionID:      sessionID,
@@ -255,25 +255,24 @@ func (s *ControlPlaneService) AuthorizeProxyRequest(ctx context.Context, req *Pr
 		return decision, nil
 	}
 
-	// Persist/Sync Session into Redis (Step 9)
-	proxySess, _, _ := s.sessionService.GetOrCreateProxySession(ctx, sessions.GetOrCreateSessionParams{
-		SessionID:      sessionID,
-		UserID:         user.ID,
-		Country:        targetCountry,
-		Provider:       provider.Name(),
-		ExitIP:         proxyAlloc.ExitIP,
-		Host:           proxyAlloc.Host,
-		Port:           proxyAlloc.Port,
-		RotationPolicy: matchedCred.RotationMode,
-		DurationMin:    matchedCred.SessionDurationMin,
+	// Register / Sync Customer Session in Redis/DB (decoupled from exit IP)
+	custSess, _, _ := s.sessionService.GetOrCreateSession(ctx, sessions.GetOrCreateSessionParams{
+		SessionID:         sessionID,
+		UserID:            user.ID,
+		CredentialID:      matchedCred.ID,
+		Country:           targetCountry,
+		RotationMode:      matchedCred.RotationMode,
+		ProviderID:        provider.Name(),
+		ProviderSessionID: fmt.Sprintf("psess_%s", generateRandomHex(6)),
+		DurationMin:       matchedCred.SessionDurationMin,
 	})
 
 	decision.Allowed = true
 	decision.StatusCode = 200
-	decision.SessionID = proxySess.SessionID
-	decision.AssignedExitIP = proxySess.ExitIP
-	decision.UpstreamProvider = proxySess.Provider
-	decision.UpstreamHost = fmt.Sprintf("%s:%d", proxySess.Host, proxySess.Port)
+	decision.SessionID = custSess.ID
+	decision.AssignedExitIP = alloc.ExitIP
+	decision.UpstreamProvider = alloc.ProviderID
+	decision.UpstreamHost = alloc.Endpoint
 
 	return decision, nil
 }

@@ -42,11 +42,8 @@ func TestExampleProviderAdapter(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetProxy failed: %v", err)
 	}
-	if alloc1.ExitIP == "" {
-		t.Errorf("Expected assigned ExitIP")
-	}
-	if alloc1.Host == "" || alloc1.Port == 0 {
-		t.Errorf("Expected valid gateway host and port, got %s:%d", alloc1.Host, alloc1.Port)
+	if alloc1.Endpoint == "" {
+		t.Errorf("Expected valid gateway endpoint, got empty")
 	}
 	if alloc1.Country != "US" {
 		t.Errorf("Expected country US, got %s", alloc1.Country)

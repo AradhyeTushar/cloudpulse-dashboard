@@ -23,7 +23,7 @@ func (h *Handler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessions, err := h.service.ListUserSessions(r.Context(), claims.UserID, "")
+	sessions, err := h.service.ListUserSessions(r.Context(), claims.UserID)
 	if err != nil {
 		response.InternalServerError(w, err.Error())
 		return
@@ -45,7 +45,7 @@ func (h *Handler) Revoke(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.service.RevokeSession(r.Context(), claims.UserID, id); err != nil {
+	if err := h.service.RevokeSession(r.Context(), id); err != nil {
 		response.InternalServerError(w, err.Error())
 		return
 	}

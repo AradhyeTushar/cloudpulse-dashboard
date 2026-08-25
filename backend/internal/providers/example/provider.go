@@ -50,7 +50,7 @@ func (p *ExampleProvider) Type() string {
 }
 
 // GetProxy allocates an upstream proxy based on requested country and session policy
-func (p *ExampleProvider) GetProxy(ctx context.Context, req *providers.ProxyRequest) (*providers.ProxyAllocation, error) {
+func (p *ExampleProvider) GetProxy(ctx context.Context, req *providers.ProxyRequest) (*providers.Allocation, error) {
 	country := req.Country
 	if country == "" {
 		country = "US"
@@ -78,20 +78,19 @@ func (p *ExampleProvider) GetProxy(ctx context.Context, req *providers.ProxyRequ
 	username := fmt.Sprintf("customer-%s-country-%s-session-%s", p.apiKey[:8], country, req.SessionID)
 	password := "auth_" + p.apiKey
 
-	return &providers.ProxyAllocation{
-		Provider:  p.name,
-		ExitIP:    exitIP,
-		Host:      p.gatewayHost,
-		Port:      p.gatewayPort,
-		Username:  username,
-		Password:  password,
-		Country:   country,
-		LatencyMs: 18,
-		ExpiresAt: time.Now().Add(time.Duration(durationMin) * time.Minute),
+	return &providers.Allocation{
+		ProviderID: p.name,
+		ExitIP:     exitIP,
+		Endpoint:   fmt.Sprintf("%s:%d", p.gatewayHost, p.gatewayPort),
+		Username:   username,
+		Password:   password,
+		Country:    country,
+		LatencyMs:  18,
+		ExpiresAt:  time.Now().Add(time.Duration(durationMin) * time.Minute),
 	}, nil
 }
 
-func (p *ExampleProvider) ReleaseProxy(ctx context.Context, allocation *providers.ProxyAllocation) error {
+func (p *ExampleProvider) ReleaseProxy(ctx context.Context, allocation *providers.Allocation) error {
 	// In production, notify upstream provider of connection termination
 	return nil
 }

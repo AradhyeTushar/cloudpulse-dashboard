@@ -2,23 +2,23 @@ package sessions
 
 import "time"
 
-// ProxySession represents a live sticky or rotating proxy session in Redis
-type ProxySession struct {
-	SessionID      string    `json:"session_id"`
-	UserID         string    `json:"user_id"`
-	Country        string    `json:"country"`
-	Provider       string    `json:"provider"`
-	ExitIP         string    `json:"exit_ip"`
-	Host           string    `json:"host"`
-	Port           int       `json:"port"`
-	RotationPolicy string    `json:"rotation_policy"` // sticky, rotating
-	DurationMin    int       `json:"duration_min"`
-	CreatedAt      time.Time `json:"created_at"`
-	ExpiresAt      time.Time `json:"expires_at"`
+// Session represents the customer-facing proxy session identity (decoupled from exit IP)
+type Session struct {
+	ID                string    `json:"id"`
+	UserID            string    `json:"user_id"`
+	CredentialID      string    `json:"credential_id"`
+	Country           string    `json:"country"`
+	RotationMode      string    `json:"rotation_mode"` // sticky, rotating
+	ProviderID        string    `json:"provider_id"`
+	ProviderSessionID string    `json:"provider_session_id"`
+	Status            string    `json:"status"` // active, expired, revoked
+	ExpiresAt         time.Time `json:"expires_at"`
+	CreatedAt         time.Time `json:"created_at"`
+	LastUsedAt        time.Time `json:"last_used_at"`
 }
 
-// Session represents a customer web login session
-type Session struct {
+// WebLoginSession represents a user browser session for the dashboard
+type WebLoginSession struct {
 	ID           string    `json:"id"`
 	UserID       string    `json:"user_id"`
 	Device       string    `json:"device"`

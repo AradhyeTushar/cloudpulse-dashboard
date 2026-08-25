@@ -19,123 +19,123 @@ var (
 type Service struct {
 	redisClient   *redis.Client
 	mu            sync.RWMutex
-	proxySessions map[string]*ProxySession
-	userSessions  map[string]*Session
+	sessions      map[string]*Session
+	userSessions  map[string]*WebLoginSession
 }
 
 func NewService(rClient *redis.Client) *Service {
 	return &Service{
-		redisClient:   rClient,
-		proxySessions: make(map[string]*ProxySession),
-		userSessions:  make(map[string]*Session),
+		redisClient:  rClient,
+		sessions:     make(map[string]*Session),
+		userSessions: make(map[string]*WebLoginSession),
 	}
 }
 
 // =========================================================================
-// PROXY SESSIONS (Redis Session Store: session:<sessionID>)
+// SESSIONS (Customer Session Identity, decoupled from exit IP)
 // =========================================================================
 
 type GetOrCreateSessionParams struct {
-	SessionID      string
-	UserID         string
-	Country        string
-	Provider       string
-	ExitIP         string
-	Host           string
-	Port           int
-	RotationPolicy string // sticky, rotating
-	DurationMin    int
+	SessionID         string
+	UserID            string
+	CredentialID      string
+	Country           string
+	RotationMode      string // sticky, rotating
+	ProviderID        string
+	ProviderSessionID string
+	DurationMin       int
 }
 
-// GetOrCreateProxySession fetches an existing active sticky session or creates a new one in Redis
-func (s *Service) GetOrCreateProxySession(ctx context.Context, params GetOrCreateSessionParams) (*ProxySession, bool, error) {
+// GetOrCreateSession retrieves an active session or registers a new one
+func (s *Service) GetOrCreateSession(ctx context.Context, params GetOrCreateSessionParams) (*Session, bool, error) {
 	if params.SessionID == "" {
 		params.SessionID = "sess_" + uuid.New().String()[:10]
 	}
 	if params.DurationMin <= 0 {
 		params.DurationMin = 15
 	}
-	if params.RotationPolicy == "" {
-		params.RotationPolicy = "sticky"
+	if params.RotationMode == "" {
+		params.RotationMode = "sticky"
+	}
+	if params.ProviderSessionID == "" {
+		params.ProviderSessionID = "psess_" + uuid.New().String()[:8]
 	}
 
 	redisKey := fmt.Sprintf("session:%s", params.SessionID)
 
-	// 1. Check Redis if exists (Sticky check)
-	if s.redisClient != nil && params.RotationPolicy == "sticky" {
+	// 1. Check Redis for existing active session (Fast Path)
+	if s.redisClient != nil && params.RotationMode == "sticky" {
 		val, err := s.redisClient.Get(ctx, redisKey).Result()
 		if err == nil && val != "" {
-			var existing ProxySession
+			var existing Session
 			if err := json.Unmarshal([]byte(val), &existing); err == nil {
-				// Verify user ownership
 				if existing.UserID == params.UserID || params.UserID == "" {
-					return &existing, false, nil // Existing session resumed!
+					existing.LastUsedAt = time.Now()
+					return &existing, false, nil
 				}
 			}
 		}
 	}
 
-	// Check In-Memory fallback if sticky
-	if params.RotationPolicy == "sticky" {
+	// Check In-Memory Store
+	if params.RotationMode == "sticky" {
 		s.mu.RLock()
-		if existing, exists := s.proxySessions[params.SessionID]; exists {
+		if existing, exists := s.sessions[params.SessionID]; exists {
 			if existing.ExpiresAt.After(time.Now()) && (existing.UserID == params.UserID || params.UserID == "") {
+				existing.LastUsedAt = time.Now()
 				s.mu.RUnlock()
-				return existing, false, nil // Existing session resumed!
+				return existing, false, nil
 			}
 		}
 		s.mu.RUnlock()
 	}
 
-	// 2. Create new session
+	// 2. Create new customer session entity
 	now := time.Now()
 	expiresAt := now.Add(time.Duration(params.DurationMin) * time.Minute)
 
-	session := &ProxySession{
-		SessionID:      params.SessionID,
-		UserID:         params.UserID,
-		Country:        params.Country,
-		Provider:       params.Provider,
-		ExitIP:         params.ExitIP,
-		Host:           params.Host,
-		Port:           params.Port,
-		RotationPolicy: params.RotationPolicy,
-		DurationMin:    params.DurationMin,
-		CreatedAt:      now,
-		ExpiresAt:      expiresAt,
+	session := &Session{
+		ID:                params.SessionID,
+		UserID:            params.UserID,
+		CredentialID:      params.CredentialID,
+		Country:           params.Country,
+		RotationMode:      params.RotationMode,
+		ProviderID:        params.ProviderID,
+		ProviderSessionID: params.ProviderSessionID,
+		Status:            "active",
+		ExpiresAt:         expiresAt,
+		CreatedAt:         now,
+		LastUsedAt:        now,
 	}
 
-	// Store in Redis with TTL
 	ttl := time.Duration(params.DurationMin) * time.Minute
-	if params.RotationPolicy == "rotating" {
-		ttl = 30 * time.Second // Short TTL for rotating sessions
+	if params.RotationMode == "rotating" {
+		ttl = 30 * time.Second
 	}
 
 	if s.redisClient != nil {
 		data, err := json.Marshal(session)
 		if err == nil {
 			_ = s.redisClient.Set(ctx, redisKey, data, ttl).Err()
-			// Index user session for listing
 			userKey := fmt.Sprintf("user_sessions:%s:%s", params.UserID, params.SessionID)
 			_ = s.redisClient.Set(ctx, userKey, params.SessionID, ttl).Err()
 		}
 	}
 
-	// Store in memory
 	s.mu.Lock()
-	s.proxySessions[session.SessionID] = session
+	s.sessions[session.ID] = session
 	s.mu.Unlock()
 
-	return session, true, nil // New session created!
+	return session, true, nil
 }
 
-func (s *Service) GetProxySession(ctx context.Context, sessionID string) (*ProxySession, error) {
+func (s *Service) GetSession(ctx context.Context, sessionID string) (*Session, error) {
 	redisKey := fmt.Sprintf("session:%s", sessionID)
 
 	if s.redisClient != nil {
 		val, err := s.redisClient.Get(ctx, redisKey).Result()
 		if err == nil && val != "" {
-			var sess ProxySession
+			var sess Session
 			if err := json.Unmarshal([]byte(val), &sess); err == nil {
 				return &sess, nil
 			}
@@ -144,7 +144,7 @@ func (s *Service) GetProxySession(ctx context.Context, sessionID string) (*Proxy
 
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	if sess, exists := s.proxySessions[sessionID]; exists {
+	if sess, exists := s.sessions[sessionID]; exists {
 		if sess.ExpiresAt.After(time.Now()) {
 			return sess, nil
 		}
@@ -152,46 +152,21 @@ func (s *Service) GetProxySession(ctx context.Context, sessionID string) (*Proxy
 	return nil, ErrSessionNotFound
 }
 
-func (s *Service) RotateProxySession(ctx context.Context, sessionID, newExitIP string) (*ProxySession, error) {
-	sess, err := s.GetProxySession(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-
-	sess.ExitIP = newExitIP
-	now := time.Now()
-	sess.ExpiresAt = now.Add(time.Duration(sess.DurationMin) * time.Minute)
-
-	redisKey := fmt.Sprintf("session:%s", sessionID)
-	ttl := time.Duration(sess.DurationMin) * time.Minute
-
-	if s.redisClient != nil {
-		data, _ := json.Marshal(sess)
-		_ = s.redisClient.Set(ctx, redisKey, data, ttl).Err()
-	}
-
-	s.mu.Lock()
-	s.proxySessions[sessionID] = sess
-	s.mu.Unlock()
-
-	return sess, nil
-}
-
-func (s *Service) RevokeProxySession(ctx context.Context, sessionID string) error {
+func (s *Service) RevokeSession(ctx context.Context, sessionID string) error {
 	redisKey := fmt.Sprintf("session:%s", sessionID)
 	if s.redisClient != nil {
 		_ = s.redisClient.Del(ctx, redisKey).Err()
 	}
 
 	s.mu.Lock()
-	delete(s.proxySessions, sessionID)
+	delete(s.sessions, sessionID)
 	s.mu.Unlock()
 
 	return nil
 }
 
-func (s *Service) ListUserProxySessions(ctx context.Context, userID string) ([]*ProxySession, error) {
-	var list []*ProxySession
+func (s *Service) ListUserSessions(ctx context.Context, userID string) ([]*Session, error) {
+	var list []*Session
 
 	if s.redisClient != nil {
 		pattern := fmt.Sprintf("user_sessions:%s:*", userID)
@@ -200,7 +175,7 @@ func (s *Service) ListUserProxySessions(ctx context.Context, userID string) ([]*
 			for _, k := range keys {
 				sessID, err := s.redisClient.Get(ctx, k).Result()
 				if err == nil && sessID != "" {
-					if sess, err := s.GetProxySession(ctx, sessID); err == nil {
+					if sess, err := s.GetSession(ctx, sessID); err == nil {
 						list = append(list, sess)
 					}
 				}
@@ -211,7 +186,7 @@ func (s *Service) ListUserProxySessions(ctx context.Context, userID string) ([]*
 	if len(list) == 0 {
 		s.mu.RLock()
 		now := time.Now()
-		for _, sess := range s.proxySessions {
+		for _, sess := range s.sessions {
 			if (sess.UserID == userID || userID == "") && sess.ExpiresAt.After(now) {
 				list = append(list, sess)
 			}
@@ -223,12 +198,12 @@ func (s *Service) ListUserProxySessions(ctx context.Context, userID string) ([]*
 }
 
 // =========================================================================
-// USER WEB SESSIONS (For User Profile View)
+// WEB LOGIN SESSIONS (Dashboard UI)
 // =========================================================================
 
-func (s *Service) CreateSession(ctx context.Context, userID, device, browser, location, ip string) (*Session, error) {
-	session := &Session{
-		ID:           "sess_" + uuid.New().String()[:12],
+func (s *Service) CreateWebLoginSession(ctx context.Context, userID, device, browser, location, ip string) (*WebLoginSession, error) {
+	session := &WebLoginSession{
+		ID:           "wlogin_" + uuid.New().String()[:12],
 		UserID:       userID,
 		Device:       device,
 		Browser:      browser,
@@ -244,25 +219,4 @@ func (s *Service) CreateSession(ctx context.Context, userID, device, browser, lo
 	s.mu.Unlock()
 
 	return session, nil
-}
-
-func (s *Service) ListUserSessions(ctx context.Context, userID string, currentSessionID string) ([]*Session, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	var sessions []*Session
-	for _, sess := range s.userSessions {
-		if sess.UserID == userID {
-			sessCopy := *sess
-			sessCopy.IsCurrent = sess.ID == currentSessionID
-			sessions = append(sessions, &sessCopy)
-		}
-	}
-	return sessions, nil
-}
-
-func (s *Service) RevokeSession(ctx context.Context, userID, sessionID string) error {
-	s.mu.Lock()
-	delete(s.userSessions, sessionID)
-	s.mu.Unlock()
-	return nil
 }

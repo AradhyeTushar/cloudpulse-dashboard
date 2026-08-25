@@ -23,25 +23,24 @@ type ProxyRequest struct {
 	DurationMin    int    `json:"duration_min,omitempty"`
 }
 
-// ProxyAllocation represents a concrete upstream proxy connection allocated by a provider
-type ProxyAllocation struct {
-	Provider       string    `json:"provider"`
-	ExitIP         string    `json:"exit_ip"`
-	Host           string    `json:"host"`
-	Port           int       `json:"port"`
-	Username       string    `json:"username"`
-	Password       string    `json:"password"`
-	Country        string    `json:"country"`
-	LatencyMs      int       `json:"latency_ms"`
-	ExpiresAt      time.Time `json:"expires_at"`
+// Allocation represents the concrete upstream egress allocation produced by a provider
+type Allocation struct {
+	ProviderID string    `json:"provider_id"`
+	Endpoint   string    `json:"endpoint"` // e.g. "egress.example-provider.net:8080"
+	Country    string    `json:"country"`
+	ExitIP     string    `json:"exit_ip"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	LatencyMs  int       `json:"latency_ms,omitempty"`
+	Username   string    `json:"username,omitempty"`
+	Password   string    `json:"password,omitempty"`
 }
 
 // Provider is the common interface that all upstream proxy suppliers must implement
 type Provider interface {
 	Name() string
 	Type() string // residential, datacenter, mobile
-	GetProxy(ctx context.Context, req *ProxyRequest) (*ProxyAllocation, error)
-	ReleaseProxy(ctx context.Context, allocation *ProxyAllocation) error
+	GetProxy(ctx context.Context, req *ProxyRequest) (*Allocation, error)
+	ReleaseProxy(ctx context.Context, allocation *Allocation) error
 	HealthCheck(ctx context.Context) (bool, int, error) // isHealthy, latencyMs, error
 }
 
