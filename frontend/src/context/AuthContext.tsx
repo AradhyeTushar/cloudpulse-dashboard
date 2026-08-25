@@ -38,19 +38,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         // ignore
       }
     }
-    return {
-      id: MOCK_USER.id,
-      name: MOCK_USER.name,
-      email: MOCK_USER.email,
-      role: 'owner',
-      workspaceName: MOCK_USER.workspaceName,
-      status: 'active',
-      assignedPlan: 'pro-500gb',
-    };
+    return null;
   });
 
   const [token, setToken] = useState<string | null>(() => {
-    return localStorage.getItem(AUTH_TOKEN_KEY) || 'mock_jwt_session_token_cp_auth';
+    return localStorage.getItem(AUTH_TOKEN_KEY) || null;
   });
 
   const [isLoading, setIsLoading] = useState(false);
