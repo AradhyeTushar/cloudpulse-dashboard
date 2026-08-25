@@ -135,6 +135,19 @@ services:
     networks:
       - cloudpulse-internal
 
+  # 9. Cloudflare Tunnel Connector (Web Dashboard & API Ingress)
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudpulse-cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - proxy-tls
+    networks:
+      - cloudpulse-internal
+
 networks:
   cloudpulse-internal:
     driver: bridge

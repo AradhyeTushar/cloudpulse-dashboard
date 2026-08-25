@@ -16,6 +16,7 @@ import (
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/plans"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/providers"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/providers/example"
+	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/providers/residential"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/sessions"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/users"
 	"github.com/google/uuid"
@@ -42,7 +43,8 @@ func NewService(
 	sessionService *sessions.Service,
 ) *ControlPlaneService {
 	registry := providers.NewRegistry()
-	// Register dynamic providers (primary and fallback)
+	// Register dynamic providers (authorized residential, primary and fallback)
+	registry.Register(residential.NewProvider())
 	registry.Register(example.NewProvider("provider-a"))
 	registry.Register(example.NewProvider("provider-b"))
 
