@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Shield, Lock, Mail, User, CheckCircle } from 'lucide-react';
+import { Shield, Lock, Mail, User, Eye, EyeOff, CheckCircle2, Zap, ArrowRight, Activity, ShieldCheck } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Button } from '../../components/ui/Button';
+import '../../styles/auth.css';
 
 export const RegisterPage: React.FC = () => {
   const navigate = useNavigate();
@@ -13,119 +13,175 @@ export const RegisterPage: React.FC = () => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
+
+  // Compute password strength
+  const getPasswordStrength = (pass: string) => {
+    if (!pass) return 0;
+    let score = 0;
+    if (pass.length >= 8) score += 1;
+    if (/[A-Z]/.test(pass) && /[a-z]/.test(pass)) score += 1;
+    if (/[0-9]/.test(pass) || /[^A-Za-z0-9]/.test(pass)) score += 1;
+    return score;
+  };
+
+  const strength = getPasswordStrength(password);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password) return;
 
+    if (password.length < 8) {
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 500);
+      showToast('Validation Error', 'Password must be at least 8 characters long', 'warning');
+      return;
+    }
+
     const ok = await register(name, email, password);
     if (ok) {
-      showToast('Account Created', `Welcome to CloudPulse, ${name}!`, 'success');
+      showToast('Account Created Successfully', `Welcome to CloudPulse, ${name}!`, 'success');
       navigate('/');
     } else {
-      showToast('Registration Error', 'Unable to create account', 'error');
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 500);
+      showToast('Registration Error', 'Unable to create account with this email', 'error');
     }
   };
 
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--bg-app)',
-        padding: '1.5rem',
-      }}
-    >
-      <div className="card" style={{ width: '100%', maxWidth: '460px', padding: '2rem' }}>
-        <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--brand-primary)',
-              color: '#ffffff',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '0.75rem',
-            }}
-          >
-            <Shield size={24} />
+    <div className="auth-container">
+      {/* Dynamic Animated Ambient Background */}
+      <div className="auth-ambient-bg">
+        <div className="auth-blob-1" />
+        <div className="auth-blob-2" />
+        <div className="auth-grid-overlay" />
+      </div>
+
+      {/* Glassmorphic Chic Register Card */}
+      <div className={`auth-glass-card ${isShaking ? 'shake' : ''}`} style={{ maxWidth: '480px' }}>
+        {/* Header */}
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <div className="auth-logo-badge">
+            <Shield size={28} />
           </div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
-            Create CloudPulse Account
+          <h1 style={{ fontSize: '1.65rem', fontWeight: 800, margin: 0, letterSpacing: '-0.025em', color: '#f8fafc' }}>
+            Create Your Account
           </h1>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
+          <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.35rem' }}>
             Get instant access to clean residential proxy pools & telemetry
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.4rem' }}>
-              Full Name
+        {/* Feature Highlights Ribbon */}
+        <div className="auth-highlights">
+          <div className="auth-highlight-item">
+            <Zap size={14} />
+            <span>Over 100K+ clean residential IPs across 195+ countries</span>
+          </div>
+          <div className="auth-highlight-item">
+            <ShieldCheck size={14} />
+            <span>Argon2id cryptographic isolation & real-time cache invalidation</span>
+          </div>
+          <div className="auth-highlight-item">
+            <Activity size={14} />
+            <span>Ultra-low latency streaming with 11,000+ req/s gateway capacity</span>
+          </div>
+        </div>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit}>
+          <div className="auth-input-group">
+            <label className="auth-input-label">
+              <span>Full Name</span>
             </label>
-            <div style={{ position: 'relative' }}>
-              <User size={15} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <div className="auth-input-wrapper">
+              <User size={16} className="auth-input-icon" />
               <input
                 type="text"
-                className="input-field"
+                className="auth-input"
                 placeholder="e.g. Satoshi Nakamoto"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                style={{ paddingLeft: '2.4rem' }}
                 required
               />
             </div>
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.4rem' }}>
-              Work Email Address
+          <div className="auth-input-group">
+            <label className="auth-input-label">
+              <span>Work Email Address</span>
             </label>
-            <div style={{ position: 'relative' }}>
-              <Mail size={15} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <div className="auth-input-wrapper">
+              <Mail size={16} className="auth-input-icon" />
               <input
                 type="email"
-                className="input-field"
+                className="auth-input"
                 placeholder="name@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                style={{ paddingLeft: '2.4rem' }}
                 required
               />
             </div>
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.4rem' }}>
-              Password
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Lock size={15} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <div className="auth-input-group">
+            <div className="auth-input-label">
+              <span>Create Password</span>
+              <span style={{ fontSize: '0.72rem', color: strength === 3 ? '#10b981' : strength === 2 ? '#f59e0b' : '#64748b' }}>
+                {strength === 3 ? 'Strong' : strength === 2 ? 'Medium' : 'Min 8 chars'}
+              </span>
+            </div>
+            <div className="auth-input-wrapper">
+              <Lock size={16} className="auth-input-icon" />
               <input
-                type="password"
-                className="input-field"
+                type={showPassword ? 'text' : 'password'}
+                className="auth-input"
                 placeholder="••••••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                style={{ paddingLeft: '2.4rem' }}
                 required
               />
+              <button
+                type="button"
+                className="auth-eye-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label="Toggle password visibility"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
+
+            {/* Password Strength Meter */}
+            {password.length > 0 && (
+              <div className="strength-meter">
+                <div className={`strength-bar ${strength >= 1 ? (strength === 1 ? 'weak' : strength === 2 ? 'medium' : 'strong') : ''}`} />
+                <div className={`strength-bar ${strength >= 2 ? (strength === 2 ? 'medium' : 'strong') : ''}`} />
+                <div className={`strength-bar ${strength >= 3 ? 'strong' : ''}`} />
+              </div>
+            )}
           </div>
 
-          <Button variant="primary" type="submit" disabled={isLoading} style={{ width: '100%', marginTop: '0.5rem' }}>
-            {isLoading ? 'Creating Account...' : 'Get Started Free'}
-          </Button>
+          <button type="submit" className="auth-submit-btn" disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <div className="spinner" style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                <span>Creating Account...</span>
+              </>
+            ) : (
+              <>
+                <span>Get Started Free</span>
+                <ArrowRight size={16} />
+              </>
+            )}
+          </button>
         </form>
 
-        <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
+        {/* Footer Navigation */}
+        <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.825rem', color: '#94a3b8' }}>
           Already have an account?{' '}
-          <NavLink to="/login" style={{ color: 'var(--brand-primary)', fontWeight: 700 }}>
+          <NavLink to="/login" style={{ color: '#818cf8', fontWeight: 700, textDecoration: 'none' }}>
             Sign In
           </NavLink>
         </div>

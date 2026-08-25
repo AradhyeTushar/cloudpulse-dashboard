@@ -1,17 +1,36 @@
 import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { Shield, Lock, Mail, ArrowRight, CheckCircle2 } from 'lucide-react';
+import { Shield, Lock, Mail, Eye, EyeOff, Sparkles, UserCheck, KeyRound, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
-import { Button } from '../../components/ui/Button';
+import '../../styles/auth.css';
+
+type RolePreset = 'customer' | 'admin' | 'validator';
 
 export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const { login, isLoading } = useAuth();
   const { showToast } = useToast();
 
+  const [activeRole, setActiveRole] = useState<RolePreset>('customer');
   const [email, setEmail] = useState('alex.mercer@cloudinfra.io');
   const [password, setPassword] = useState('Password123!');
+  const [showPassword, setShowPassword] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
+
+  const selectRole = (role: RolePreset) => {
+    setActiveRole(role);
+    if (role === 'customer') {
+      setEmail('alex.mercer@cloudinfra.io');
+      setPassword('Password123!');
+    } else if (role === 'admin') {
+      setEmail('admin.operator@cloudpulse.io');
+      setPassword('AdminSecurePass123!');
+    } else if (role === 'validator') {
+      setEmail('validator@enterprise.com');
+      setPassword('DeployPassword123!');
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,142 +38,134 @@ export const LoginPage: React.FC = () => {
 
     const ok = await login(email, password);
     if (ok) {
-      showToast('Logged In', `Welcome back, ${email}`, 'success');
+      showToast('Authenticated Successfully', `Welcome back to CloudPulse, ${email}`, 'success');
       navigate('/');
     } else {
-      showToast('Authentication Failed', 'Invalid email or password', 'error');
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 500);
+      showToast('Authentication Failed', 'Invalid credentials or inactive account', 'error');
     }
   };
 
-  const autofillDemoCustomer = () => {
-    setEmail('alex.mercer@cloudinfra.io');
-    setPassword('Password123!');
-  };
-
-  const autofillDemoAdmin = () => {
-    setEmail('admin.operator@cloudpulse.io');
-    setPassword('AdminSecurePass123!');
-  };
-
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        background: 'var(--bg-app)',
-        padding: '1.5rem',
-      }}
-    >
-      <div className="card" style={{ width: '100%', maxWidth: '440px', padding: '2rem' }}>
-        {/* Brand */}
+    <div className="auth-container">
+      {/* Dynamic Animated Ambient Background Canvas */}
+      <div className="auth-ambient-bg">
+        <div className="auth-blob-1" />
+        <div className="auth-blob-2" />
+        <div className="auth-grid-overlay" />
+      </div>
+
+      {/* Glassmorphic Chic Login Card */}
+      <div className={`auth-glass-card ${isShaking ? 'shake' : ''}`}>
+        {/* Brand Header */}
         <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
-          <div
-            style={{
-              width: 48,
-              height: 48,
-              borderRadius: 'var(--radius-md)',
-              background: 'var(--brand-primary)',
-              color: '#ffffff',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: '0.75rem',
-            }}
-          >
-            <Shield size={24} />
+          <div className="auth-logo-badge">
+            <Shield size={28} />
           </div>
-          <h1 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0, color: 'var(--text-primary)' }}>
-            Sign in to CloudPulse
+          <h1 style={{ fontSize: '1.65rem', fontWeight: 800, margin: 0, letterSpacing: '-0.025em', color: '#f8fafc' }}>
+            Welcome to CloudPulse
           </h1>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', marginTop: '0.35rem' }}>
-            Control plane for proxy infrastructure & cloud fleets
+          <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.4rem' }}>
+            High-throughput residential proxy control plane & telemetry
           </p>
         </div>
 
-        {/* Demo Autofill Shortcut Pills */}
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem' }}>
+        {/* Quick Role Switcher Tabs */}
+        <div className="auth-role-tabs">
           <button
             type="button"
-            onClick={autofillDemoCustomer}
-            style={{
-              flex: 1,
-              padding: '0.4rem',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--bg-border)',
-              background: 'var(--bg-subtle)',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-            }}
+            className={`auth-role-tab ${activeRole === 'customer' ? 'active' : ''}`}
+            onClick={() => selectRole('customer')}
           >
-            Fill Customer
+            <UserCheck size={14} />
+            Customer
           </button>
           <button
             type="button"
-            onClick={autofillDemoAdmin}
-            style={{
-              flex: 1,
-              padding: '0.4rem',
-              fontSize: '0.75rem',
-              fontWeight: 600,
-              borderRadius: 'var(--radius-sm)',
-              border: '1px solid var(--bg-border)',
-              background: 'var(--bg-subtle)',
-              color: 'var(--text-secondary)',
-              cursor: 'pointer',
-            }}
+            className={`auth-role-tab ${activeRole === 'admin' ? 'active' : ''}`}
+            onClick={() => selectRole('admin')}
           >
-            Fill Super Admin
+            <Sparkles size={14} />
+            Super Admin
+          </button>
+          <button
+            type="button"
+            className={`auth-role-tab ${activeRole === 'validator' ? 'active' : ''}`}
+            onClick={() => selectRole('validator')}
+          >
+            <KeyRound size={14} />
+            Validator
           </button>
         </div>
 
         {/* Login Form */}
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '1.2rem' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.4rem' }}>
-              Email Address
+        <form onSubmit={handleSubmit}>
+          <div className="auth-input-group">
+            <label className="auth-input-label">
+              <span>Work Email Address</span>
+              <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Argon2id Protected</span>
             </label>
-            <div style={{ position: 'relative' }}>
-              <Mail size={15} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+            <div className="auth-input-wrapper">
+              <Mail size={16} className="auth-input-icon" />
               <input
                 type="email"
-                className="input-field"
+                className="auth-input"
+                placeholder="name@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                style={{ paddingLeft: '2.4rem' }}
                 required
               />
             </div>
           </div>
 
-          <div>
-            <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.4rem' }}>
-              Password
-            </label>
-            <div style={{ position: 'relative' }}>
-              <Lock size={15} style={{ position: 'absolute', left: '0.85rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <div className="auth-input-group">
+            <div className="auth-input-label">
+              <span>Password</span>
+              <span style={{ fontSize: '0.72rem', color: '#818cf8', cursor: 'pointer' }}>
+                Forgot Password?
+              </span>
+            </div>
+            <div className="auth-input-wrapper">
+              <Lock size={16} className="auth-input-icon" />
               <input
-                type="password"
-                className="input-field"
+                type={showPassword ? 'text' : 'password'}
+                className="auth-input"
+                placeholder="••••••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                style={{ paddingLeft: '2.4rem' }}
                 required
               />
+              <button
+                type="button"
+                className="auth-eye-toggle"
+                onClick={() => setShowPassword(!showPassword)}
+                aria-label="Toggle password visibility"
+              >
+                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
             </div>
           </div>
 
-          <Button variant="primary" type="submit" disabled={isLoading} style={{ width: '100%', marginTop: '0.5rem' }}>
-            {isLoading ? 'Authenticating...' : 'Sign In'}
-          </Button>
+          <button type="submit" className="auth-submit-btn" disabled={isLoading}>
+            {isLoading ? (
+              <>
+                <div className="spinner" style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+                <span>Authenticating Control Plane...</span>
+              </>
+            ) : (
+              <>
+                <span>Sign In to Console</span>
+                <ArrowRight size={16} />
+              </>
+            )}
+          </button>
         </form>
 
-        <div style={{ textAlign: 'center', marginTop: '1.5rem', fontSize: '0.8125rem', color: 'var(--text-secondary)' }}>
-          Don't have an account?{' '}
-          <NavLink to="/register" style={{ color: 'var(--brand-primary)', fontWeight: 700 }}>
+        {/* Footer Navigation */}
+        <div style={{ textAlign: 'center', marginTop: '1.75rem', fontSize: '0.825rem', color: '#94a3b8' }}>
+          Don't have an enterprise account?{' '}
+          <NavLink to="/register" style={{ color: '#818cf8', fontWeight: 700, textDecoration: 'none' }}>
             Register Now
           </NavLink>
         </div>
