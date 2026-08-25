@@ -8,6 +8,7 @@ import (
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/credentials"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/plans"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/users"
+	"github.com/redis/go-redis/v9"
 )
 
 type SystemOverview struct {
@@ -36,13 +37,15 @@ type Service struct {
 	userRepo     users.Repository
 	credRepo     credentials.Repository
 	plansService *plans.Service
+	redisClient  *redis.Client
 }
 
-func NewService(userRepo users.Repository, credRepo credentials.Repository, plansService *plans.Service) *Service {
+func NewService(userRepo users.Repository, credRepo credentials.Repository, plansService *plans.Service, rClient *redis.Client) *Service {
 	return &Service{
 		userRepo:     userRepo,
 		credRepo:     credRepo,
 		plansService: plansService,
+		redisClient:  rClient,
 	}
 }
 
@@ -105,6 +108,12 @@ func (s *Service) ToggleUserStatus(ctx context.Context, userID string) (*users.U
 	if err := s.userRepo.Update(ctx, user); err != nil {
 		return nil, err
 	}
+
+	// Real-time Gateway Policy Invalidation via Redis Pub/Sub
+	if s.redisClient != nil {
+		_ = s.redisClient.Publish(ctx, "policy:invalidate", userID).Err()
+	}
+
 	return user, nil
 }
 
@@ -114,5 +123,14 @@ func (s *Service) AssignUserPlan(ctx context.Context, userID, planSlug string) e
 	}
 
 	_, err := s.plansService.CreateSubscription(ctx, userID, planSlug, "Admin Override")
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Real-time Gateway Policy Invalidation via Redis Pub/Sub
+	if s.redisClient != nil {
+		_ = s.redisClient.Publish(ctx, "policy:invalidate", userID).Err()
+	}
+
+	return nil
 }

@@ -139,6 +139,26 @@ func (c *PolicyCache) Set(key string, decision *AuthDecision) {
 	}
 }
 
+func (c *PolicyCache) InvalidateTarget(target string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if target == "" || target == "*" {
+		c.entries = make(map[string]*cachedPolicy)
+		return
+	}
+	for k, v := range c.entries {
+		if v.decision != nil && (v.decision.UserID == target || v.decision.CredentialID == target || strings.Contains(k, target)) {
+			delete(c.entries, k)
+		}
+	}
+}
+
+func (c *PolicyCache) Flush() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries = make(map[string]*cachedPolicy)
+}
+
 // Edge Rate Limiter
 type IPRateLimiter struct {
 	mu      sync.Mutex
@@ -225,6 +245,20 @@ func main() {
 		policyCache:   NewPolicyCache(30 * time.Second), // 30s local policy cache
 		redisClient:   rClient,
 		inMemSessions: make(map[string]*AuthDecision),
+	}
+
+	// 0. Start Real-Time Redis Pub/Sub Policy Invalidation Listener
+	if rClient != nil {
+		go func() {
+			pubsub := rClient.Subscribe(context.Background(), "policy:invalidate")
+			defer pubsub.Close()
+			ch := pubsub.Channel()
+			log.Println("[GATEWAY PUBSUB] Subscribed to real-time 'policy:invalidate' channel")
+			for msg := range ch {
+				log.Printf("[POLICY INVALIDATION] Evicting cached policy for target: %s", msg.Payload)
+				gw.invalidatePolicy(msg.Payload)
+			}
+		}()
 	}
 
 	// 1. Prometheus Telemetry Listener
@@ -416,6 +450,22 @@ func (gw *Gateway) resolveSessionFastPath(ctx context.Context, sessionID, user, 
 	}
 
 	return decision, false
+}
+
+func (gw *Gateway) invalidatePolicy(target string) {
+	gw.policyCache.InvalidateTarget(target)
+
+	gw.sessMu.Lock()
+	if target == "" || target == "*" {
+		gw.inMemSessions = make(map[string]*AuthDecision)
+	} else {
+		for id, sess := range gw.inMemSessions {
+			if sess.UserID == target || sess.CredentialID == target || id == target {
+				delete(gw.inMemSessions, id)
+			}
+		}
+	}
+	gw.sessMu.Unlock()
 }
 
 func extractSessionID(username string) string {

@@ -130,4 +130,31 @@ func TestProxyGatewaySessionManagerFastPath(t *testing.T) {
 			t.Errorf("Fast-path failed: expected Control Plane calls to remain 1, got %d", atomic.LoadInt64(&controlPlaneCalls))
 		}
 	})
+
+	// -------------------------------------------------------------------------
+	// REQUEST 3 (REAL-TIME INVALIDATION): Admin invalidates user policy
+	// Must evict cache and contact Control Plane on next request!
+	// -------------------------------------------------------------------------
+	t.Run("Real-Time Invalidation: Eviction forces fresh Control Plane sync", func(t *testing.T) {
+		// Evict user from cache
+		gw.invalidatePolicy("usr_tenant_100")
+
+		req, _ := http.NewRequest("GET", targetServer.URL+"/test-data-3", nil)
+		req.SetBasicAuth("valid_user-session-sess_fast_path_123", "valid_pass")
+
+		resp, err := proxyClient.Do(req)
+		if err != nil {
+			t.Fatalf("Third request failed: %v", err)
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("Expected 200 OK, got %d", resp.StatusCode)
+		}
+
+		// Control Plane calls should now be 2!
+		if atomic.LoadInt64(&controlPlaneCalls) != 2 {
+			t.Errorf("Expected Control Plane calls to increment to 2 after invalidation, got %d", atomic.LoadInt64(&controlPlaneCalls))
+		}
+	})
 }

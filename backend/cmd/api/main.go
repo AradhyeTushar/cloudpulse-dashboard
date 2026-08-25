@@ -58,6 +58,7 @@ func main() {
 
 	credRepo := credentials.NewRepository(db.Pool)
 	credService := credentials.NewService(credRepo)
+	credService.SetRedisClient(db.Redis)
 	credHandler := credentials.NewHandler(credService)
 
 	sessionService := sessions.NewService(db.Redis)
@@ -73,7 +74,7 @@ func main() {
 	providerService := providers.NewService()
 	providerHandler := providers.NewHandler(providerService)
 
-	adminService := admin.NewService(userRepo, credRepo, plansService)
+	adminService := admin.NewService(userRepo, credRepo, plansService, db.Redis)
 	adminHandler := admin.NewHandler(adminService)
 
 	auditService := audit.NewService()

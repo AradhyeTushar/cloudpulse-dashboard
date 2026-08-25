@@ -11,14 +11,20 @@ import (
 
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/auth"
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 type Service struct {
-	repo Repository
+	repo        Repository
+	redisClient *redis.Client
 }
 
 func NewService(repo Repository) *Service {
 	return &Service{repo: repo}
+}
+
+func (s *Service) SetRedisClient(rClient *redis.Client) {
+	s.redisClient = rClient
 }
 
 // Generate random secret token
@@ -143,11 +149,20 @@ func (s *Service) ResetProxyCredential(ctx context.Context, userID, id string) (
 	if err := s.repo.UpdateProxyCredential(ctx, cred); err != nil {
 		return nil, err
 	}
+
+	if s.redisClient != nil {
+		_ = s.redisClient.Publish(ctx, "policy:invalidate", cred.UserID).Err()
+	}
+
 	return cred, nil
 }
 
 func (s *Service) DeleteProxyCredential(ctx context.Context, userID, id string) error {
-	return s.repo.DeleteProxyCredential(ctx, userID, id)
+	err := s.repo.DeleteProxyCredential(ctx, userID, id)
+	if err == nil && s.redisClient != nil {
+		_ = s.redisClient.Publish(ctx, "policy:invalidate", userID).Err()
+	}
+	return err
 }
 
 // =========================================================================
