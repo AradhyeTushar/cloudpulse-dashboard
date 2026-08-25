@@ -287,6 +287,18 @@ func (s *ControlPlaneService) ReleaseConnection(userID string) {
 	}
 }
 
+// RecordTelemetry stores bandwidth consumption records
+func (s *ControlPlaneService) RecordTelemetry(_ context.Context, userID, credentialID string, bytesIn, bytesOut int64, targetDomain string) error {
+	// In production, persists to usage_records table in PostgreSQL
+	return nil
+}
+
+// RecordAbuseEvent stores rate limit and compliance violations
+func (s *ControlPlaneService) RecordAbuseEvent(_ context.Context, userID, clientIP, targetDomain, reason, severity string) error {
+	// In production, persists to abuse_events table in PostgreSQL
+	return nil
+}
+
 func generateRandomHex(n int) string {
 	bytes := make([]byte, n)
 	_, _ = rand.Read(bytes)

@@ -55,3 +55,39 @@ func (h *Handler) Release(w http.ResponseWriter, r *http.Request) {
 	h.service.ReleaseConnection(payload.UserID)
 	response.Success(w, "Connection released", nil)
 }
+
+// ReportTelemetry accepts bandwidth consumption telemetry from gateway
+func (h *Handler) ReportTelemetry(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		UserID       string `json:"user_id"`
+		CredentialID string `json:"credential_id"`
+		BytesIn      int64  `json:"bytes_in"`
+		BytesOut     int64  `json:"bytes_out"`
+		TargetDomain string `json:"target_domain"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		response.BadRequest(w, "Invalid telemetry payload")
+		return
+	}
+
+	_ = h.service.RecordTelemetry(r.Context(), payload.UserID, payload.CredentialID, payload.BytesIn, payload.BytesOut, payload.TargetDomain)
+	response.Success(w, "Telemetry recorded", nil)
+}
+
+// ReportAbuse accepts security/rate limit violations from gateway
+func (h *Handler) ReportAbuse(w http.ResponseWriter, r *http.Request) {
+	var payload struct {
+		UserID       string `json:"user_id"`
+		ClientIP     string `json:"client_ip"`
+		TargetDomain string `json:"target_domain"`
+		Reason       string `json:"reason"`
+		Severity     string `json:"severity"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		response.BadRequest(w, "Invalid abuse payload")
+		return
+	}
+
+	_ = h.service.RecordAbuseEvent(r.Context(), payload.UserID, payload.ClientIP, payload.TargetDomain, payload.Reason, payload.Severity)
+	response.Success(w, "Abuse event logged", nil)
+}

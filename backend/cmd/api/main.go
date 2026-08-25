@@ -136,6 +136,8 @@ func main() {
 		r.Route("/internal/proxy", func(r chi.Router) {
 			r.Post("/authorize", controlPlaneHandler.Authorize)
 			r.Post("/release", controlPlaneHandler.Release)
+			r.Post("/telemetry", controlPlaneHandler.ReportTelemetry)
+			r.Post("/abuse-event", controlPlaneHandler.ReportAbuse)
 		})
 
 		// Protected Routes (Customer & Tenant)

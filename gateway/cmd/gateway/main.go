@@ -14,6 +14,7 @@ import (
 	"os/signal"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -22,6 +23,10 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
+
+// =========================================================================
+// PROMETHEUS METRICS (Data Plane Telemetry)
+// =========================================================================
 
 var (
 	proxyRequestsTotal = promauto.NewCounterVec(
@@ -37,7 +42,7 @@ var (
 			Name: "cloudpulse_gateway_bytes_transferred_total",
 			Help: "Total bytes transferred through proxy gateway",
 		},
-		[]string{"direction"},
+		[]string{"direction", "user_id"},
 	)
 
 	activeTunnels = promauto.NewGauge(
@@ -46,25 +51,83 @@ var (
 			Help: "Current active proxy connections",
 		},
 	)
+
+	dialLatency = promauto.NewHistogram(
+		prometheus.HistogramOpts{
+			Name:    "cloudpulse_gateway_dial_duration_seconds",
+			Help:    "Upstream connection dial latency in seconds",
+			Buckets: prometheus.DefBuckets,
+		},
+	)
+
+	rateLimitHits = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "cloudpulse_gateway_rate_limit_hits_total",
+			Help: "Total rate limit rejections at gateway edge",
+		},
+	)
 )
 
+// RateLimiter tracks per-IP request frequency
+type IPRateLimiter struct {
+	mu      sync.Mutex
+	limits  map[string][]time.Time
+	maxReqs int
+	window  time.Duration
+}
+
+func NewIPRateLimiter(maxReqs int, window time.Duration) *IPRateLimiter {
+	return &IPRateLimiter{
+		limits:  make(map[string][]time.Time),
+		maxReqs: maxReqs,
+		window:  window,
+	}
+}
+
+func (rl *IPRateLimiter) Allow(ip string) bool {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+
+	now := time.Now()
+	cutoff := now.Add(-rl.window)
+
+	var valid []time.Time
+	for _, t := range rl.limits[ip] {
+		if t.After(cutoff) {
+			valid = append(valid, t)
+		}
+	}
+
+	if len(valid) >= rl.maxReqs {
+		rl.limits[ip] = valid
+		return false
+	}
+
+	rl.limits[ip] = append(valid, now)
+	return true
+}
+
+// Gateway Server Struct
 type Gateway struct {
 	httpPort        string
 	metricsPort     string
 	controlPlaneURL string
 	activeCount     int64
 	httpClient      *http.Client
+	rateLimiter     *IPRateLimiter
 }
 
 type AuthDecision struct {
-	Allowed          bool   `json:"allowed"`
-	StatusCode       int    `json:"status_code"`
-	Reason           string `json:"reason"`
-	UserID           string `json:"user_id"`
-	SessionID        string `json:"session_id"`
-	AssignedExitIP   string `json:"assigned_exit_ip"`
-	UpstreamProvider string `json:"upstream_provider"`
-	UpstreamHost     string `json:"upstream_host"`
+	Allowed             bool   `json:"allowed"`
+	StatusCode          int    `json:"status_code"`
+	Reason              string `json:"reason"`
+	UserID              string `json:"user_id"`
+	CredentialID        string `json:"credential_id"`
+	SessionID           string `json:"session_id"`
+	AssignedExitIP      string `json:"assigned_exit_ip"`
+	UpstreamProvider    string `json:"upstream_provider"`
+	UpstreamHost        string `json:"upstream_host"`
+	RemainingQuotaBytes int64  `json:"remaining_quota_bytes"`
 }
 
 func main() {
@@ -79,8 +142,9 @@ func main() {
 		metricsPort:     metricsPort,
 		controlPlaneURL: controlPlaneURL,
 		httpClient: &http.Client{
-			Timeout: 3 * time.Second,
+			Timeout: 5 * time.Second,
 		},
+		rateLimiter: NewIPRateLimiter(120, time.Minute),
 	}
 
 	// 1. Start Prometheus Metrics Listener
@@ -98,7 +162,7 @@ func main() {
 		}
 	}()
 
-	// 2. Start HTTP CONNECT Proxy Tunnel Server
+	// 2. Start HTTP CONNECT Proxy Tunnel Server with Timeouts
 	proxyServer := &http.Server{
 		Addr:         ":" + httpPort,
 		Handler:      http.HandlerFunc(gw.handleProxyRequest),
@@ -127,18 +191,31 @@ func main() {
 }
 
 func (gw *Gateway) handleProxyRequest(w http.ResponseWriter, r *http.Request) {
-	// Parse credentials from Proxy-Authorization or Authorization
+	clientIP, _, _ := net.SplitHostPort(r.RemoteAddr)
+	if clientIP == "" {
+		clientIP = r.RemoteAddr
+	}
+
+	// -------------------------------------------------------------------------
+	// 1. RATE LIMITING & ABUSE GUARD
+	// -------------------------------------------------------------------------
+	if !gw.rateLimiter.Allow(clientIP) {
+		rateLimitHits.Inc()
+		proxyRequestsTotal.WithLabelValues(r.Method, "rate_limited").Inc()
+		gw.reportAbuse("", clientIP, r.Host, "Rate limit exceeded (120 req/min)", "medium")
+		http.Error(w, "CloudPulse Edge Rate Limit Exceeded", http.StatusTooManyRequests)
+		return
+	}
+
+	// -------------------------------------------------------------------------
+	// 2. AUTHENTICATION EXTRACTION
+	// -------------------------------------------------------------------------
 	username, password := gw.extractCredentials(r)
 	if username == "" && password == "" {
 		proxyRequestsTotal.WithLabelValues(r.Method, "unauthorized").Inc()
 		w.Header().Set("Proxy-Authenticate", `Basic realm="CloudPulse Secure Proxy Gateway"`)
 		http.Error(w, "Proxy Authentication Required", http.StatusProxyAuthRequired)
 		return
-	}
-
-	clientIP, _, _ := net.SplitHostPort(r.RemoteAddr)
-	if clientIP == "" {
-		clientIP = r.RemoteAddr
 	}
 
 	targetHost := r.Host
@@ -154,25 +231,34 @@ func (gw *Gateway) handleProxyRequest(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// -------------------------------------------------------------------------
-	// Handshake with Control Plane Engine
+	// 3. CONTROL PLANE HANDSHAKE & POLICY CHECK
 	// -------------------------------------------------------------------------
 	decision, err := gw.authorizeWithControlPlane(r.Context(), username, password, clientIP, targetHost, targetPort, r.Method)
 	if err != nil {
-		log.Printf("[CONTROL PLANE WARNING] Handshake error: %v (falling back to direct transit)", err)
+		log.Printf("[CONTROL PLANE WARNING] Handshake unreachable: %v (falling back to direct transit)", err)
 	} else if !decision.Allowed {
 		proxyRequestsTotal.WithLabelValues(r.Method, "policy_rejected").Inc()
 		status := decision.StatusCode
 		if status == 0 {
 			status = http.StatusForbidden
 		}
+
+		if status == 401 || status == 403 {
+			gw.reportAbuse(decision.UserID, clientIP, targetHost, decision.Reason, "high")
+		}
+
 		http.Error(w, fmt.Sprintf("CloudPulse Policy Block: %s", decision.Reason), status)
 		return
 	}
 
+	// Connection accounting release
 	if decision != nil && decision.UserID != "" {
 		defer gw.releaseConnection(decision.UserID)
 	}
 
+	// -------------------------------------------------------------------------
+	// 4. DATA PLANE TUNNELING / UPSTREAM FORWARDING
+	// -------------------------------------------------------------------------
 	if r.Method == http.MethodConnect {
 		gw.handleConnectTunnel(w, r, decision)
 	} else {
@@ -251,8 +337,57 @@ func (gw *Gateway) releaseConnection(userID string) {
 	}
 }
 
+func (gw *Gateway) reportTelemetry(userID, credID string, bytesIn, bytesOut int64, domain string) {
+	go func() {
+		payload := map[string]interface{}{
+			"user_id":       userID,
+			"credential_id": credID,
+			"bytes_in":      bytesIn,
+			"bytes_out":     bytesOut,
+			"target_domain": domain,
+		}
+		body, _ := json.Marshal(payload)
+		req, _ := http.NewRequest("POST", gw.controlPlaneURL+"/api/v1/internal/proxy/telemetry", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := gw.httpClient.Do(req)
+		if err == nil {
+			_ = resp.Body.Close()
+		}
+	}()
+}
+
+func (gw *Gateway) reportAbuse(userID, clientIP, targetDomain, reason, severity string) {
+	go func() {
+		payload := map[string]interface{}{
+			"user_id":       userID,
+			"client_ip":     clientIP,
+			"target_domain": targetDomain,
+			"reason":        reason,
+			"severity":      severity,
+		}
+		body, _ := json.Marshal(payload)
+		req, _ := http.NewRequest("POST", gw.controlPlaneURL+"/api/v1/internal/proxy/abuse-event", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		resp, err := gw.httpClient.Do(req)
+		if err == nil {
+			_ = resp.Body.Close()
+		}
+	}()
+}
+
 func (gw *Gateway) handleConnectTunnel(w http.ResponseWriter, r *http.Request, decision *AuthDecision) {
-	destConn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
+	dialStart := time.Now()
+
+	// Dial target destination (or upstream provider if configured)
+	destHost := r.Host
+	if decision != nil && decision.UpstreamHost != "" && !strings.Contains(decision.UpstreamHost, "cloudpulse.net") {
+		destHost = decision.UpstreamHost
+	}
+
+	dialer := net.Dialer{Timeout: 10 * time.Second}
+	destConn, err := dialer.Dial("tcp", destHost)
+	dialLatency.Observe(time.Since(dialStart).Seconds())
+
 	if err != nil {
 		proxyRequestsTotal.WithLabelValues("CONNECT", "dial_error").Inc()
 		http.Error(w, err.Error(), http.StatusServiceUnavailable)
@@ -275,9 +410,10 @@ func (gw *Gateway) handleConnectTunnel(w http.ResponseWriter, r *http.Request, d
 	}
 	defer clientConn.Close()
 
-	// Send 200 Connection Established to client
+	// Establish tunnel response to client
 	_, _ = clientConn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
 
+	// Connection Accounting
 	atomic.AddInt64(&gw.activeCount, 1)
 	activeTunnels.Inc()
 	defer func() {
@@ -287,22 +423,36 @@ func (gw *Gateway) handleConnectTunnel(w http.ResponseWriter, r *http.Request, d
 
 	proxyRequestsTotal.WithLabelValues("CONNECT", "success").Inc()
 
-	// Bi-directional tunnel stream with byte accounting
-	done := make(chan struct{}, 2)
+	// Bi-directional streaming with accurate Bandwidth Accounting
+	var bytesIn, bytesOut int64
+	var wg sync.WaitGroup
+	wg.Add(2)
+
+	userID := "anonymous"
+	credID := ""
+	if decision != nil && decision.UserID != "" {
+		userID = decision.UserID
+		credID = decision.CredentialID
+	}
 
 	go func() {
+		defer wg.Done()
 		n, _ := io.Copy(destConn, clientConn)
-		proxyBytesTransferred.WithLabelValues("inbound").Add(float64(n))
-		done <- struct{}{}
+		atomic.AddInt64(&bytesIn, n)
+		proxyBytesTransferred.WithLabelValues("inbound", userID).Add(float64(n))
 	}()
 
 	go func() {
+		defer wg.Done()
 		n, _ := io.Copy(clientConn, destConn)
-		proxyBytesTransferred.WithLabelValues("outbound").Add(float64(n))
-		done <- struct{}{}
+		atomic.AddInt64(&bytesOut, n)
+		proxyBytesTransferred.WithLabelValues("outbound", userID).Add(float64(n))
 	}()
 
-	<-done
+	wg.Wait()
+
+	// Report Bandwidth Accounting Telemetry
+	gw.reportTelemetry(userID, credID, bytesIn, bytesOut, r.Host)
 }
 
 func (gw *Gateway) handleDirectProxy(w http.ResponseWriter, r *http.Request, decision *AuthDecision) {
@@ -310,12 +460,19 @@ func (gw *Gateway) handleDirectProxy(w http.ResponseWriter, r *http.Request, dec
 	outReq.RequestURI = ""
 
 	transport := &http.Transport{
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).DialContext,
 		MaxIdleConns:        100,
 		IdleConnTimeout:     90 * time.Second,
 		DisableCompression: true,
 	}
 
+	dialStart := time.Now()
 	resp, err := transport.RoundTrip(outReq)
+	dialLatency.Observe(time.Since(dialStart).Seconds())
+
 	if err != nil {
 		proxyRequestsTotal.WithLabelValues(r.Method, "upstream_error").Inc()
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -329,9 +486,19 @@ func (gw *Gateway) handleDirectProxy(w http.ResponseWriter, r *http.Request, dec
 		}
 	}
 	w.WriteHeader(resp.StatusCode)
+
+	userID := "anonymous"
+	credID := ""
+	if decision != nil && decision.UserID != "" {
+		userID = decision.UserID
+		credID = decision.CredentialID
+	}
+
 	n, _ := io.Copy(w, resp.Body)
-	proxyBytesTransferred.WithLabelValues("outbound").Add(float64(n))
+	proxyBytesTransferred.WithLabelValues("outbound", userID).Add(float64(n))
 	proxyRequestsTotal.WithLabelValues(r.Method, "success").Inc()
+
+	gw.reportTelemetry(userID, credID, 0, n, r.Host)
 }
 
 func getEnv(key, fallback string) string {
