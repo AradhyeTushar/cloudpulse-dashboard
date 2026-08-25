@@ -15,6 +15,7 @@ export const RegisterPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
+  const [registerStage, setRegisterStage] = useState<'idle' | 'creating' | 'success'>('idle');
 
   // Compute password strength
   const getPasswordStrength = (pass: string) => {
@@ -39,11 +40,16 @@ export const RegisterPage: React.FC = () => {
       return;
     }
 
+    setRegisterStage('creating');
     const ok = await register(name, email, password);
     if (ok) {
+      setRegisterStage('success');
       showToast('Account Created Successfully', `Welcome to CloudPulse, ${name}!`, 'success');
-      navigate('/');
+      setTimeout(() => {
+        navigate('/');
+      }, 600);
     } else {
+      setRegisterStage('idle');
       setIsShaking(true);
       setTimeout(() => setIsShaking(false), 500);
       showToast('Registration Error', 'Unable to create account with this email', 'error');
@@ -60,7 +66,7 @@ export const RegisterPage: React.FC = () => {
       </div>
 
       {/* Glassmorphic Chic Register Card */}
-      <div className={`auth-glass-card ${isShaking ? 'shake' : ''}`} style={{ maxWidth: '480px' }}>
+      <div className={`auth-glass-card ${isShaking ? 'shake' : ''} ${registerStage === 'success' ? 'success-transition' : ''}`} style={{ maxWidth: '480px' }}>
         {/* Header */}
         <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
           <div className="auth-logo-badge">
@@ -97,13 +103,17 @@ export const RegisterPage: React.FC = () => {
               <span>Full Name</span>
             </label>
             <div className="auth-input-wrapper">
-              <User size={16} className="auth-input-icon" />
+              <div className="auth-input-icon">
+                <User size={16} />
+              </div>
               <input
                 type="text"
                 className="auth-input"
+                style={{ paddingLeft: '2.9rem', paddingRight: '1rem' }}
                 placeholder="e.g. Satoshi Nakamoto"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
+                disabled={registerStage !== 'idle'}
                 required
               />
             </div>
@@ -114,13 +124,17 @@ export const RegisterPage: React.FC = () => {
               <span>Work Email Address</span>
             </label>
             <div className="auth-input-wrapper">
-              <Mail size={16} className="auth-input-icon" />
+              <div className="auth-input-icon">
+                <Mail size={16} />
+              </div>
               <input
                 type="email"
                 className="auth-input"
+                style={{ paddingLeft: '2.9rem', paddingRight: '1rem' }}
                 placeholder="name@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={registerStage !== 'idle'}
                 required
               />
             </div>
@@ -134,13 +148,17 @@ export const RegisterPage: React.FC = () => {
               </span>
             </div>
             <div className="auth-input-wrapper">
-              <Lock size={16} className="auth-input-icon" />
+              <div className="auth-input-icon">
+                <Lock size={16} />
+              </div>
               <input
                 type={showPassword ? 'text' : 'password'}
                 className="auth-input"
+                style={{ paddingLeft: '2.9rem', paddingRight: '2.8rem' }}
                 placeholder="••••••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={registerStage !== 'idle'}
                 required
               />
               <button
@@ -163,11 +181,20 @@ export const RegisterPage: React.FC = () => {
             )}
           </div>
 
-          <button type="submit" className="auth-submit-btn" disabled={isLoading}>
-            {isLoading ? (
+          <button
+            type="submit"
+            className={`auth-submit-btn ${registerStage === 'success' ? 'success-state' : ''}`}
+            disabled={registerStage !== 'idle' || isLoading}
+          >
+            {registerStage === 'creating' ? (
               <>
                 <div className="spinner" style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
                 <span>Creating Account...</span>
+              </>
+            ) : registerStage === 'success' ? (
+              <>
+                <CheckCircle2 size={18} style={{ animation: 'checkmarkPop 0.4s ease forwards' }} />
+                <span>Account Ready! Redirecting...</span>
               </>
             ) : (
               <>

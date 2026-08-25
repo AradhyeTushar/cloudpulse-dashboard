@@ -14,14 +14,15 @@ import {
   Server,
   ShieldAlert,
   Activity,
-  MoreHorizontal,
   ChevronDown,
   ChevronRight,
   Shield,
   ArrowRightLeft,
   Lock,
+  LogOut,
 } from 'lucide-react';
-import { MOCK_USER } from '../../data/mock-user';
+import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -31,11 +32,20 @@ interface SidebarProps {
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const { showToast } = useToast();
 
   const [proxyOpen, setProxyOpen] = useState(true);
   const [accountOpen, setAccountOpen] = useState(true);
 
-  const isAdmin = location.pathname.startsWith('/admin');
+  const isSuperUser = user?.role === 'admin' || user?.role === 'owner';
+  const isAdminView = location.pathname.startsWith('/admin');
+
+  const handleLogout = async () => {
+    await logout();
+    showToast('Signed Out', 'You have been safely signed out of CloudPulse.', 'info');
+    navigate('/login');
+  };
 
   return (
     <>
@@ -45,60 +55,59 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
         <div className="sidebar-header">
           <NavLink to="/" className="brand-link" onClick={onClose} title="Go to CloudPulse">
             <div className="brand-icon">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M4 14.899A7 7 0 1 1 15.71 8h1.79a4.5 4.5 0 0 1 2.5 8.242" />
-                <path d="M12 12v9" />
-                <path d="m8 17 4 4 4-4" />
-              </svg>
+              <Shield size={18} />
             </div>
             <span>CloudPulse</span>
           </NavLink>
         </div>
 
-        {/* Portal Switcher Banner */}
-        <div style={{ padding: '0.75rem 1rem 0.25rem 1rem' }}>
-          <button
-            onClick={() => {
-              if (isAdmin) {
-                navigate('/');
-              } else {
-                navigate('/admin/users');
-              }
-              onClose();
-            }}
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '0.5rem 0.75rem',
-              borderRadius: 'var(--radius-md)',
-              border: '1px solid var(--bg-border)',
-              background: isAdmin ? 'rgba(239, 68, 68, 0.08)' : 'rgba(92, 60, 246, 0.08)',
-              color: isAdmin ? '#ef4444' : 'var(--brand-primary)',
-              fontSize: '0.75rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              textTransform: 'uppercase',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-              <Shield size={14} />
-              <span>{isAdmin ? 'Admin Mode' : 'Customer Mode'}</span>
-            </div>
-            <ArrowRightLeft size={12} />
-          </button>
-        </div>
+        {/* Portal Switcher Banner for Super Admins / Owners */}
+        {isSuperUser && (
+          <div style={{ padding: '0.75rem 1rem 0.25rem 1rem' }}>
+            <button
+              onClick={() => {
+                if (isAdminView) {
+                  navigate('/');
+                } else {
+                  navigate('/admin/users');
+                }
+                onClose();
+              }}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '0.5rem 0.75rem',
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-color)',
+                background: isAdminView ? 'rgba(239, 68, 68, 0.1)' : 'rgba(92, 60, 246, 0.1)',
+                color: isAdminView ? '#ef4444' : 'var(--brand-primary)',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                textTransform: 'uppercase',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                <Shield size={14} />
+                <span>{isAdminView ? 'Admin Portal' : 'Customer View'}</span>
+              </div>
+              <ArrowRightLeft size={12} />
+            </button>
+          </div>
+        )}
 
         {/* Sidebar Content Navigation */}
         <div className="sidebar-content">
-          {isAdmin ? (
+          {isAdminView && isSuperUser ? (
             /* =================================================================
-               ADMIN PORTAL NAVIGATION
+               ADMIN PORTAL NAVIGATION (ADMIN / OWNER ONLY)
                ================================================================= */
             <div className="nav-group">
-              <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Admin Controls
+              <div style={{ padding: '0.5rem 0.75rem', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Admin Management
               </div>
 
               <NavLink
@@ -107,7 +116,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 onClick={onClose}
               >
                 <Users className="nav-item-icon" />
-                <span>Users</span>
+                <span>Users & Tenants</span>
               </NavLink>
 
               <NavLink
@@ -116,7 +125,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 onClick={onClose}
               >
                 <Layers className="nav-item-icon" />
-                <span>Plans</span>
+                <span>Plans & Pricing</span>
               </NavLink>
 
               <NavLink
@@ -125,7 +134,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 onClick={onClose}
               >
                 <Server className="nav-item-icon" />
-                <span>Providers</span>
+                <span>Proxy Providers</span>
               </NavLink>
 
               <NavLink
@@ -134,7 +143,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 onClick={onClose}
               >
                 <Radio className="nav-item-icon" />
-                <span>Sessions</span>
+                <span>Active Sessions</span>
               </NavLink>
 
               <NavLink
@@ -143,7 +152,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 onClick={onClose}
               >
                 <ShieldAlert className="nav-item-icon" />
-                <span>Abuse</span>
+                <span>Abuse & Security</span>
               </NavLink>
 
               <NavLink
@@ -152,12 +161,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 onClick={onClose}
               >
                 <Activity className="nav-item-icon" />
-                <span>System Health</span>
+                <span>Gateway Health</span>
               </NavLink>
             </div>
           ) : (
             /* =================================================================
-               CUSTOMER PORTAL NAVIGATION
+               CUSTOMER PORTAL NAVIGATION (REGULAR USERS & CUSTOMER VIEW)
                ================================================================= */
             <div className="nav-group">
               {/* Dashboard */}
@@ -181,7 +190,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                     <Zap className="nav-item-icon" />
-                    <span style={{ fontWeight: 700 }}>Proxy</span>
+                    <span style={{ fontWeight: 700 }}>Residential Proxy</span>
                   </div>
                   {proxyOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </button>
@@ -221,7 +230,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                       onClick={onClose}
                     >
                       <Globe size={14} className="nav-item-icon" />
-                      <span>Locations</span>
+                      <span>Locations (195+)</span>
                     </NavLink>
 
                     <NavLink
@@ -230,7 +239,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                       onClick={onClose}
                     >
                       <BarChart2 size={14} className="nav-item-icon" />
-                      <span>Usage</span>
+                      <span>Usage Analytics</span>
                     </NavLink>
                   </div>
                 )}
@@ -244,7 +253,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                   onClick={onClose}
                 >
                   <Receipt className="nav-item-icon" />
-                  <span>Billing</span>
+                  <span>Billing & Plans</span>
                 </NavLink>
               </div>
 
@@ -289,7 +298,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                       onClick={onClose}
                     >
                       <Lock size={14} className="nav-item-icon" />
-                      <span>Security</span>
+                      <span>Security & 2FA</span>
                     </NavLink>
                   </div>
                 )}
@@ -298,24 +307,75 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           )}
         </div>
 
-        {/* Sidebar Footer */}
-        <div className="sidebar-footer">
-          <button
-            className="user-profile-btn"
-            onClick={() => {
-              navigate('/account/profile');
-              onClose();
-            }}
-          >
-            <div className="user-avatar">
-              {MOCK_USER.name.charAt(0)}
+        {/* Sidebar Footer with Live Profile & Logout */}
+        <div className="sidebar-footer" style={{ borderTop: '1px solid var(--border-color)', padding: '0.75rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem', width: '100%' }}>
+            <div
+              style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', overflow: 'hidden', cursor: 'pointer', flex: 1 }}
+              onClick={() => {
+                navigate('/account/profile');
+                onClose();
+              }}
+            >
+              <div
+                style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: '50%',
+                  background: isSuperUser ? 'linear-gradient(135deg, #ef4444, #f97316)' : 'linear-gradient(135deg, #6366f1, #a855f7)',
+                  color: '#fff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontWeight: 700,
+                  fontSize: '0.8125rem',
+                  flexShrink: 0,
+                }}
+              >
+                {(user?.name || 'U').charAt(0).toUpperCase()}
+              </div>
+              <div style={{ overflow: 'hidden' }}>
+                <div style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {user?.name || 'Customer'}
+                </div>
+                <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'capitalize' }}>
+                  {user?.role || 'Customer'}
+                </div>
+              </div>
             </div>
-            <div className="user-info">
-              <div className="user-name">{MOCK_USER.name}</div>
-              <div className="user-role">{isAdmin ? 'Super Admin' : MOCK_USER.workspaceName}</div>
-            </div>
-            <MoreHorizontal size={16} color="var(--text-dim)" />
-          </button>
+
+            {/* Logout Action Button */}
+            <button
+              type="button"
+              onClick={handleLogout}
+              title="Sign Out"
+              aria-label="Sign Out"
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--border-color)',
+                background: 'var(--bg-surface)',
+                color: 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                flexShrink: 0,
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.color = '#ef4444';
+                e.currentTarget.style.borderColor = 'rgba(239, 68, 68, 0.4)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.color = 'var(--text-secondary)';
+                e.currentTarget.style.borderColor = 'var(--border-color)';
+              }}
+            >
+              <LogOut size={15} />
+            </button>
+          </div>
         </div>
       </aside>
     </>

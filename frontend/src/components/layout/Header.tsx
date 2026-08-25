@@ -10,14 +10,13 @@ import {
   User,
   LogOut,
   Shield,
-  Sliders,
   Receipt,
   Home,
 } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { Dropdown } from '../ui/Dropdown';
-import { MOCK_USER } from '../../data/mock-user';
 
 interface HeaderProps {
   onToggleSidebar: () => void;
@@ -28,38 +27,44 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const navigate = useNavigate();
   const { resolvedTheme, setTheme } = useTheme();
   const { showToast } = useToast();
+  const { user, logout } = useAuth();
+
+  const handleLogout = async () => {
+    await logout();
+    showToast('Signed Out', 'You have been safely signed out of CloudPulse.', 'info');
+    navigate('/login');
+  };
 
   const getBreadcrumbs = () => {
     const path = location.pathname;
     if (path === '/') {
       return [{ label: 'Dashboard', to: '/' }];
     }
-    if (path.startsWith('/vps')) {
+    if (path.startsWith('/admin')) {
       const parts = path.split('/').filter(Boolean);
-      if (parts.length === 1) {
-        return [
-          { label: 'Dashboard', to: '/' },
-          { label: 'VPS', to: '/vps' },
-        ];
-      }
       return [
-        { label: 'Dashboard', to: '/' },
-        { label: 'VPS', to: '/vps' },
-        { label: parts[1], to: `/vps/${parts[1]}` },
+        { label: 'Admin Portal', to: '/admin/users' },
+        { label: parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : 'Overview', to: path },
+      ];
+    }
+    if (path.startsWith('/proxy')) {
+      const parts = path.split('/').filter(Boolean);
+      return [
+        { label: 'Proxy Suite', to: '/proxy/overview' },
+        { label: parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : 'Overview', to: path },
       ];
     }
     if (path.startsWith('/billing')) {
       return [
-        { label: 'Dashboard', to: '/' },
         { label: 'Billing', to: '/billing' },
         { label: 'Subscriptions', to: '/billing' },
       ];
     }
-    if (path.startsWith('/settings') || path.startsWith('/profile')) {
+    if (path.startsWith('/account')) {
+      const parts = path.split('/').filter(Boolean);
       return [
-        { label: 'Dashboard', to: '/' },
-        { label: 'Profile', to: '/settings' },
-        { label: 'Account information', to: '/settings' },
+        { label: 'Account', to: '/account/profile' },
+        { label: parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : 'Profile', to: path },
       ];
     }
     return [{ label: 'Dashboard', to: '/' }];
@@ -69,14 +74,14 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
 
   const userMenuItems = [
     {
-      label: 'Dashboard',
-      icon: <Home size={15} />,
-      onClick: () => navigate('/'),
+      label: user?.name ? `${user.name} (${user.role || 'customer'})` : 'Account Profile',
+      icon: <User size={15} />,
+      onClick: () => navigate('/account/profile'),
     },
     {
-      label: 'Account information',
-      icon: <User size={15} />,
-      onClick: () => navigate('/settings'),
+      label: 'Proxy Overview',
+      icon: <Home size={15} />,
+      onClick: () => navigate('/proxy/overview'),
     },
     {
       label: 'Subscriptions & Billing',
@@ -84,14 +89,14 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
       onClick: () => navigate('/billing'),
     },
     {
-      label: 'Two-Factor Authentication',
+      label: 'Security & API Keys',
       icon: <Shield size={15} />,
-      onClick: () => navigate('/settings?tab=security'),
+      onClick: () => navigate('/account/security'),
     },
     {
       label: 'Sign Out',
       icon: <LogOut size={15} />,
-      onClick: () => showToast('Session Ended', 'You have been logged out (mock action).', 'info'),
+      onClick: handleLogout,
       danger: true,
       divider: true,
     },
@@ -127,7 +132,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
         {/* Quick Search Bar */}
         <button
           className="search-bar-trigger"
-          onClick={() => showToast('Command Palette', 'Search servers, domains, and actions (⌘K)', 'info')}
+          onClick={() => showToast('Search', 'Search proxy endpoints, sessions, or user plans', 'info')}
         >
           <Search size={14} />
           <span style={{ display: 'none', minWidth: '80px' }} className="d-md-inline">
@@ -139,7 +144,7 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
         {/* Notifications Icon with Indicator */}
         <button
           className="header-icon-btn"
-          onClick={() => showToast('Notifications', 'All server operations running smoothly.', 'info')}
+          onClick={() => showToast('System Telemetry', 'All 5 gateway clusters operating at nominal latency.', 'info')}
           aria-label="Notifications"
         >
           <Bell size={17} />

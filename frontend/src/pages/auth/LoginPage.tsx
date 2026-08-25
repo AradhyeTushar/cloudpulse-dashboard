@@ -17,6 +17,7 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('Password123!');
   const [showPassword, setShowPassword] = useState(false);
   const [isShaking, setIsShaking] = useState(false);
+  const [loginStage, setLoginStage] = useState<'idle' | 'authenticating' | 'success'>('idle');
 
   const selectRole = (role: RolePreset) => {
     setActiveRole(role);
@@ -36,11 +37,23 @@ export const LoginPage: React.FC = () => {
     e.preventDefault();
     if (!email || !password) return;
 
+    setLoginStage('authenticating');
     const ok = await login(email, password);
+
     if (ok) {
-      showToast('Authenticated Successfully', `Welcome back to CloudPulse, ${email}`, 'success');
-      navigate('/');
+      setLoginStage('success');
+      showToast('Authenticated Successfully', `Welcome back, ${email}`, 'success');
+      
+      // Smooth animation pause before navigating to appropriate dashboard
+      setTimeout(() => {
+        if (activeRole === 'admin' || email.includes('admin')) {
+          navigate('/admin/users');
+        } else {
+          navigate('/');
+        }
+      }, 600);
     } else {
+      setLoginStage('idle');
       setIsShaking(true);
       setTimeout(() => setIsShaking(false), 500);
       showToast('Authentication Failed', 'Invalid credentials or inactive account', 'error');
@@ -57,7 +70,7 @@ export const LoginPage: React.FC = () => {
       </div>
 
       {/* Glassmorphic Chic Login Card */}
-      <div className={`auth-glass-card ${isShaking ? 'shake' : ''}`}>
+      <div className={`auth-glass-card ${isShaking ? 'shake' : ''} ${loginStage === 'success' ? 'success-transition' : ''}`}>
         {/* Brand Header */}
         <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
           <div className="auth-logo-badge">
@@ -107,13 +120,17 @@ export const LoginPage: React.FC = () => {
               <span style={{ fontSize: '0.72rem', color: '#64748b' }}>Argon2id Protected</span>
             </label>
             <div className="auth-input-wrapper">
-              <Mail size={16} className="auth-input-icon" />
+              <div className="auth-input-icon">
+                <Mail size={16} />
+              </div>
               <input
                 type="email"
                 className="auth-input"
+                style={{ paddingLeft: '2.9rem', paddingRight: '1rem' }}
                 placeholder="name@company.com"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                disabled={loginStage !== 'idle'}
                 required
               />
             </div>
@@ -127,13 +144,17 @@ export const LoginPage: React.FC = () => {
               </span>
             </div>
             <div className="auth-input-wrapper">
-              <Lock size={16} className="auth-input-icon" />
+              <div className="auth-input-icon">
+                <Lock size={16} />
+              </div>
               <input
                 type={showPassword ? 'text' : 'password'}
                 className="auth-input"
+                style={{ paddingLeft: '2.9rem', paddingRight: '2.8rem' }}
                 placeholder="••••••••••••"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                disabled={loginStage !== 'idle'}
                 required
               />
               <button
@@ -147,11 +168,20 @@ export const LoginPage: React.FC = () => {
             </div>
           </div>
 
-          <button type="submit" className="auth-submit-btn" disabled={isLoading}>
-            {isLoading ? (
+          <button
+            type="submit"
+            className={`auth-submit-btn ${loginStage === 'success' ? 'success-state' : ''}`}
+            disabled={loginStage !== 'idle' || isLoading}
+          >
+            {loginStage === 'authenticating' ? (
               <>
                 <div className="spinner" style={{ width: 16, height: 16, border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-                <span>Authenticating Control Plane...</span>
+                <span>Verifying Control Plane...</span>
+              </>
+            ) : loginStage === 'success' ? (
+              <>
+                <CheckCircle2 size={18} style={{ animation: 'checkmarkPop 0.4s ease forwards' }} />
+                <span>Access Granted! Redirecting...</span>
               </>
             ) : (
               <>
