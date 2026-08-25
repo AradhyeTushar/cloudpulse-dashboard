@@ -1,43 +1,85 @@
-# CloudPulse System Architecture
+# CloudPulse Architecture & Control Plane Design
+
+CloudPulse separates the system strictly into the **Control Plane** (Management, Billing, Policy Enforcement, Quota & Session Decision Engine) and the **Data Plane** (High-throughput Proxy Tunneling & Egress Forwarding).
+
+---
+
+## 🏛️ Two-Tier Architecture
 
 ```text
-                                       ┌─────────────────────────┐
-                                       │   React Frontend (UI)   │
-                                       │   (Port 5173 / 80)      │
-                                       └────────────┬────────────┘
-                                                    │
-                                           HTTP REST / JSON
-                                                    │
-                                                    ▼
-┌───────────────────────┐              ┌─────────────────────────┐
-│     Proxy Clients     │─── HTTP/SOCKS ───▶   Go Proxy Gateway  │
-│ (Scrapers, Apps, Bots)│   (Port 8000)│    (3proxy / Custom)    │
-└───────────────────────┘              └────────────┬────────────┘
-                                                    │ Telemetry & Auth
-                                                    ▼
-                                       ┌─────────────────────────┐
-                                       │      Go Backend API     │
-                                       │       (Port 8080)       │
-                                       └───────┬─────────┬───────┘
-                                               │         │
-                        ┌──────────────────────┘         └─────────────────────┐
-                        ▼                                                      ▼
-             ┌────────────────────┐                                 ┌────────────────────┐
-             │ PostgreSQL 16 (DB) │                                 │  Redis 7 (Sessions)│
-             │   Durable State    │                                 │   Fast Cache & TTL │
-             └────────────────────┘                                 └────────────────────┘
-                        ▲                                                      ▲
-                        │                                                      │
-                        └──────────────────────┬───────────────────────────────┘
-                                               │ Scrapes /metrics
-                                               ▼
-                                  ┌────────────────────────┐
-                                  │   Prometheus & Grafana │
-                                  │    Telemetry & Alerts  │
-                                  └────────────────────────┘
+                                CONTROL PLANE
+
+                      ┌──────────────────────────────┐
+                      │   React + TypeScript Frontend│
+                      │     (Customer & Admin UI)    │
+                      └──────────────┬───────────────┘
+                                     │
+                                     ▼
+                      ┌──────────────────────────────┐
+                      │    Go API Control Plane      │
+                      │         (Port 8080)          │
+                      └──────────────┬───────────────┘
+                                     │
+             ┌───────────────────────┴───────────────────────┐
+             ▼                                               ▼
+  ┌───────────────────────┐                       ┌───────────────────────┐
+  │     PostgreSQL 16     │                       │        Redis 7        │
+  │  (11 Foundational     │                       │  (Live Sticky/Rotating│
+  │   Application Tables) │                       │   Sessions & Limits)  │
+  └───────────────────────┘                       └───────────────────────┘
+             │                                               │
+             └───────────────────────┬───────────────────────┘
+                                     ▼
+                      ┌──────────────────────────────┐
+                      │     Provider Abstraction     │
+                      │  (Residential, DC, Mobile)   │
+                      └──────────────────────────────┘
+
+─────────────────────────────────────────────────────────────────────────────
+
+                                 DATA PLANE
+
+                      ┌──────────────────────────────┐
+                      │  Customer Proxy Connection   │
+                      │  (HTTP / HTTPS / SOCKS5)     │
+                      └──────────────┬───────────────┘
+                                     │
+                                     ▼
+                      ┌──────────────────────────────┐
+                      │     Proxy Gateway (8000)     │
+                      │      (3proxy / Go Engine)    │
+                      └──────────────┬───────────────┘
+                                     │
+                    Handshake & Policy Check (200 OK)
+                                     ▼
+                      ┌──────────────────────────────┐
+                      │     Redis / Session Policy   │
+                      │   (Exit IP, Concurrency Cap) │
+                      └──────────────┬───────────────┘
+                                     │
+                                     ▼
+                      ┌──────────────────────────────┐
+                      │     Provider Abstraction     │
+                      └──────────────┬───────────────┘
+                                     │
+                                     ▼
+                      ┌──────────────────────────────┐
+                      │ Authorized Egress Provider   │
+                      │   (BrightData/Oxylabs/DC)    │
+                      └──────────────────────────────┘
 ```
 
-## Data Flow & Authentication
-1. **User Authentication**: Passwords hashed using **Argon2id** (`t=3, m=64MB, p=4`). Sessions issue standard HS256 JWT tokens or Redis-backed sliding session tokens.
-2. **API Credentials**: Customer tokens prefixed with `cp_live_` and stored as cryptographically secure SHA-256 hashes in PostgreSQL.
-3. **Proxy Gateway Routing**: The gateway intercepts HTTP `CONNECT` and `GET/POST` requests, checks credentials or IP whitelist, forwards to selected upstream nodes, and reports transferred byte counters directly to Prometheus.
+---
+
+## 🔐 Control Plane Policy Decision Pipeline
+
+Before any proxy data stream is established by the Data Plane Gateway, the request traverses the 8-step Control Plane decision engine:
+
+1. **Customer**: Lookup tenant account.
+2. **Authentication**: Verify Basic Auth `username:password` or `cp_live_` token.
+3. **Plan**: Verify active subscription status and ensure remaining bandwidth quota > 0.
+4. **Credential**: Verify proxy credential is `active` and enforce client IP whitelist (CIDR).
+5. **Country Permissions**: Check compliance policy and target country routing privileges.
+6. **Connection Limit**: Atomically check active concurrent TCP streams against `threads_limit`.
+7. **Session Resolution**: Allocate or resume persistent sticky session or rotating exit IP.
+8. **Provider Abstraction**: Route to the lowest-latency, healthy upstream egress supplier.

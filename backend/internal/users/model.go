@@ -11,6 +11,7 @@ type User struct {
 	WorkspaceName     string    `json:"workspace_name"`
 	TwoFactorEnabled  bool      `json:"two_factor_enabled"`
 	TwoFactorSecret   string    `json:"-"`
+	Status            string    `json:"status"` // active, suspended, pending
 	CreatedAt         time.Time `json:"created_at"`
 	UpdatedAt         time.Time `json:"updated_at"`
 }

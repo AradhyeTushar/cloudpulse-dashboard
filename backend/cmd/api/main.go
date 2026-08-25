@@ -15,6 +15,7 @@ import (
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/audit"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/auth"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/config"
+	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/controlplane"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/credentials"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/database"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/plans"
@@ -61,6 +62,10 @@ func main() {
 
 	sessionService := sessions.NewService(db.Redis)
 	sessionHandler := sessions.NewHandler(sessionService)
+
+	// Control Plane Authorization Engine (Step 7)
+	controlPlaneService := controlplane.NewService(userRepo, credRepo, plansService, sessionService)
+	controlPlaneHandler := controlplane.NewHandler(controlPlaneService)
 
 	usageService := usage.NewService()
 	usageHandler := usage.NewHandler(usageService)
@@ -127,7 +132,13 @@ func main() {
 		// Public Plans Catalog
 		r.Get("/plans", plansHandler.ListPlans)
 
-		// Protected Routes
+		// Internal Control Plane Handshake (For Gateway / Data Plane)
+		r.Route("/internal/proxy", func(r chi.Router) {
+			r.Post("/authorize", controlPlaneHandler.Authorize)
+			r.Post("/release", controlPlaneHandler.Release)
+		})
+
+		// Protected Routes (Customer & Tenant)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Authenticator(tokenService, credService))
 

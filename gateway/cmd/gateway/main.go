@@ -1,14 +1,18 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"syscall"
@@ -45,9 +49,22 @@ var (
 )
 
 type Gateway struct {
-	httpPort    string
-	metricsPort string
-	activeCount int64
+	httpPort        string
+	metricsPort     string
+	controlPlaneURL string
+	activeCount     int64
+	httpClient      *http.Client
+}
+
+type AuthDecision struct {
+	Allowed          bool   `json:"allowed"`
+	StatusCode       int    `json:"status_code"`
+	Reason           string `json:"reason"`
+	UserID           string `json:"user_id"`
+	SessionID        string `json:"session_id"`
+	AssignedExitIP   string `json:"assigned_exit_ip"`
+	UpstreamProvider string `json:"upstream_provider"`
+	UpstreamHost     string `json:"upstream_host"`
 }
 
 func main() {
@@ -55,10 +72,15 @@ func main() {
 
 	httpPort := getEnv("GATEWAY_HTTP_PORT", "8000")
 	metricsPort := getEnv("GATEWAY_METRICS_PORT", "9100")
+	controlPlaneURL := getEnv("CONTROL_PLANE_URL", "http://localhost:8080")
 
 	gw := &Gateway{
-		httpPort:    httpPort,
-		metricsPort: metricsPort,
+		httpPort:        httpPort,
+		metricsPort:     metricsPort,
+		controlPlaneURL: controlPlaneURL,
+		httpClient: &http.Client{
+			Timeout: 3 * time.Second,
+		},
 	}
 
 	// 1. Start Prometheus Metrics Listener
@@ -86,7 +108,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("[GATEWAY READY] HTTP/HTTPS Proxy Tunnel listening on :%s", httpPort)
+		log.Printf("[GATEWAY READY] HTTP/HTTPS Proxy Tunnel listening on :%s (Connected to Control Plane %s)", httpPort, controlPlaneURL)
 		if err := proxyServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("[GATEWAY FATAL] Proxy listener failed: %v", err)
 		}
@@ -105,42 +127,131 @@ func main() {
 }
 
 func (gw *Gateway) handleProxyRequest(w http.ResponseWriter, r *http.Request) {
-	// Authentication check (Proxy-Authorization)
-	if !gw.authenticate(r) {
+	// Parse credentials from Proxy-Authorization or Authorization
+	username, password := gw.extractCredentials(r)
+	if username == "" && password == "" {
 		proxyRequestsTotal.WithLabelValues(r.Method, "unauthorized").Inc()
 		w.Header().Set("Proxy-Authenticate", `Basic realm="CloudPulse Secure Proxy Gateway"`)
 		http.Error(w, "Proxy Authentication Required", http.StatusProxyAuthRequired)
 		return
 	}
 
+	clientIP, _, _ := net.SplitHostPort(r.RemoteAddr)
+	if clientIP == "" {
+		clientIP = r.RemoteAddr
+	}
+
+	targetHost := r.Host
+	targetPort := 80
+	if strings.Contains(targetHost, ":") {
+		h, p, err := net.SplitHostPort(targetHost)
+		if err == nil {
+			targetHost = h
+			targetPort, _ = strconv.Atoi(p)
+		}
+	} else if r.Method == http.MethodConnect {
+		targetPort = 443
+	}
+
+	// -------------------------------------------------------------------------
+	// Handshake with Control Plane Engine
+	// -------------------------------------------------------------------------
+	decision, err := gw.authorizeWithControlPlane(r.Context(), username, password, clientIP, targetHost, targetPort, r.Method)
+	if err != nil {
+		log.Printf("[CONTROL PLANE WARNING] Handshake error: %v (falling back to direct transit)", err)
+	} else if !decision.Allowed {
+		proxyRequestsTotal.WithLabelValues(r.Method, "policy_rejected").Inc()
+		status := decision.StatusCode
+		if status == 0 {
+			status = http.StatusForbidden
+		}
+		http.Error(w, fmt.Sprintf("CloudPulse Policy Block: %s", decision.Reason), status)
+		return
+	}
+
+	if decision != nil && decision.UserID != "" {
+		defer gw.releaseConnection(decision.UserID)
+	}
+
 	if r.Method == http.MethodConnect {
-		gw.handleConnectTunnel(w, r)
+		gw.handleConnectTunnel(w, r, decision)
 	} else {
-		gw.handleDirectProxy(w, r)
+		gw.handleDirectProxy(w, r, decision)
 	}
 }
 
-func (gw *Gateway) authenticate(r *http.Request) bool {
+func (gw *Gateway) extractCredentials(r *http.Request) (string, string) {
 	authHeader := r.Header.Get("Proxy-Authorization")
 	if authHeader == "" {
-		// Also allow standard Authorization header for backward compatibility
 		authHeader = r.Header.Get("Authorization")
 	}
 	if authHeader == "" {
-		return true // In development mode, allow open or local connections
+		return "", ""
 	}
 
 	parts := strings.SplitN(authHeader, " ", 2)
 	if len(parts) == 2 && strings.EqualFold(parts[0], "basic") {
 		payload, err := base64.StdEncoding.DecodeString(parts[1])
-		if err == nil && len(payload) > 0 {
-			return true
+		if err == nil {
+			pair := strings.SplitN(string(payload), ":", 2)
+			if len(pair) == 2 {
+				return pair[0], pair[1]
+			}
 		}
 	}
-	return true
+	return "", ""
 }
 
-func (gw *Gateway) handleConnectTunnel(w http.ResponseWriter, r *http.Request) {
+func (gw *Gateway) authorizeWithControlPlane(ctx context.Context, user, pass, clientIP, host string, port int, method string) (*AuthDecision, error) {
+	payload := map[string]interface{}{
+		"username":    user,
+		"password":    pass,
+		"client_ip":   clientIP,
+		"target_host": host,
+		"target_port": port,
+		"protocol":    strings.ToLower(method),
+	}
+	body, _ := json.Marshal(payload)
+
+	req, err := http.NewRequestWithContext(ctx, "POST", gw.controlPlaneURL+"/api/v1/internal/proxy/authorize", bytes.NewReader(body))
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := gw.httpClient.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	var result struct {
+		Success  bool         `json:"success"`
+		Decision AuthDecision `json:"decision"`
+		Data     AuthDecision `json:"data"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	if result.Decision.StatusCode != 0 {
+		return &result.Decision, nil
+	}
+	return &result.Data, nil
+}
+
+func (gw *Gateway) releaseConnection(userID string) {
+	payload := map[string]string{"user_id": userID}
+	body, _ := json.Marshal(payload)
+	req, _ := http.NewRequest("POST", gw.controlPlaneURL+"/api/v1/internal/proxy/release", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := gw.httpClient.Do(req)
+	if err == nil {
+		_ = resp.Body.Close()
+	}
+}
+
+func (gw *Gateway) handleConnectTunnel(w http.ResponseWriter, r *http.Request, decision *AuthDecision) {
 	destConn, err := net.DialTimeout("tcp", r.Host, 10*time.Second)
 	if err != nil {
 		proxyRequestsTotal.WithLabelValues("CONNECT", "dial_error").Inc()
@@ -194,7 +305,7 @@ func (gw *Gateway) handleConnectTunnel(w http.ResponseWriter, r *http.Request) {
 	<-done
 }
 
-func (gw *Gateway) handleDirectProxy(w http.ResponseWriter, r *http.Request) {
+func (gw *Gateway) handleDirectProxy(w http.ResponseWriter, r *http.Request, decision *AuthDecision) {
 	outReq := r.Clone(r.Context())
 	outReq.RequestURI = ""
 
