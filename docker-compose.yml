@@ -1,0 +1,120 @@
+version: '3.8'
+
+services:
+  # 1. PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: cloudpulse-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: cloudpulse
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./migrations/000001_init_schema.up.sql:/docker-entrypoint-initdb.d/01_init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 2. Redis Session Store
+  redis:
+    image: redis:7-alpine
+    container_name: cloudpulse-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # 3. CloudPulse Go API Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cloudpulse-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ENV: development
+      PORT: "8080"
+      DATABASE_URL: postgres://postgres:postgrespassword@postgres:5432/cloudpulse?sslmode=disable
+      REDIS_URL: redis://redis:6379/0
+      JWT_SECRET: cloudpulse_production_grade_super_secret_jwt_key_32_bytes
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  # 4. CloudPulse High-Throughput Proxy Gateway
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: cloudpulse-gateway
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+      - "9100:9100"
+    environment:
+      GATEWAY_HTTP_PORT: "8000"
+      GATEWAY_METRICS_PORT: "9100"
+    depends_on:
+      - backend
+
+  # 5. Prometheus Telemetry Engine
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: cloudpulse-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    depends_on:
+      - backend
+      - gateway
+
+  # 6. Grafana Operations Dashboards
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: cloudpulse-grafana
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+
+  # 7. React Frontend
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: cloudpulse-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
+  redis_data:
+  grafana_data:

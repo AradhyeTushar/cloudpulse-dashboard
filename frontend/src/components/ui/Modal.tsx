@@ -2,7 +2,7 @@ import React, { useEffect } from 'react';
 import { X } from 'lucide-react';
 
 interface ModalProps {
-  isOpen: boolean;
+  isOpen?: boolean;
   onClose: () => void;
   title: string;
   children: React.ReactNode;
@@ -11,7 +11,7 @@ interface ModalProps {
 }
 
 export const Modal: React.FC<ModalProps> = ({
-  isOpen,
+  isOpen = true,
   onClose,
   title,
   children,

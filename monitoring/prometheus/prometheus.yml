@@ -1,0 +1,12 @@
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: 'cloudpulse-api'
+    static_configs:
+      - targets: ['api:8080']
+
+  - job_name: 'cloudpulse-gateway'
+    static_configs:
+      - targets: ['gateway:9100']

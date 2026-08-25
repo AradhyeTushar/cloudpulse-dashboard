@@ -1,0 +1,10 @@
+-- CloudPulse PostgreSQL Revert Migration (000001_init_schema.down.sql)
+
+DROP TABLE IF EXISTS abuse_rules CASCADE;
+DROP TABLE IF EXISTS audit_logs CASCADE;
+DROP TABLE IF EXISTS usage_records CASCADE;
+DROP TABLE IF EXISTS sticky_sessions CASCADE;
+DROP TABLE IF EXISTS proxy_endpoints CASCADE;
+DROP TABLE IF EXISTS plans CASCADE;
+DROP TABLE IF EXISTS api_credentials CASCADE;
+DROP TABLE IF EXISTS users CASCADE;
