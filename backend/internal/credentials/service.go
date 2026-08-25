@@ -114,6 +114,9 @@ func (s *Service) CreateProxyCredential(ctx context.Context, userID string, req 
 		CreatedAt:          time.Now(),
 		UpdatedAt:          time.Now(),
 	}
+	if cred.IPWhitelist == nil {
+		cred.IPWhitelist = []string{}
+	}
 
 	if err := s.repo.CreateProxyCredential(ctx, cred); err != nil {
 		return nil, err

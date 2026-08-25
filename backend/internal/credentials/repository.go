@@ -54,6 +54,9 @@ func NewMemoryRepository() Repository {
 
 // PostgreSQL Implementation
 func (r *postgresRepo) CreateProxyCredential(ctx context.Context, c *ProxyCredential) error {
+	if c.IPWhitelist == nil {
+		c.IPWhitelist = []string{}
+	}
 	query := `
 		INSERT INTO proxy_credentials 
 		(id, user_id, name, proxy_type, protocol, rotation_mode, session_duration_min, target_country, target_country_code, target_state, target_city, username, password_hash, plain_password, ip_whitelist, status, created_at, updated_at)
@@ -131,6 +134,9 @@ func (r *postgresRepo) DeleteProxyCredential(ctx context.Context, userID, id str
 }
 
 func (r *postgresRepo) CreateApiKey(ctx context.Context, k *ApiKey) error {
+	if k.Scopes == nil {
+		k.Scopes = []string{}
+	}
 	query := `INSERT INTO api_keys (id, user_id, name, prefix, secret_hash, scopes, expires_at, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 	_, err := r.pool.Exec(ctx, query, k.ID, k.UserID, k.Name, k.Prefix, k.SecretHash, k.Scopes, k.ExpiresAt, k.CreatedAt)
 	return err

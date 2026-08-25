@@ -18,6 +18,8 @@ import (
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/providers/example"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/sessions"
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/users"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type ControlPlaneService struct {
@@ -26,6 +28,7 @@ type ControlPlaneService struct {
 	plansService     *plans.Service
 	sessionService   *sessions.Service
 	providerRegistry *providers.Registry
+	pool             *pgxpool.Pool
 
 	// Thread tracking (in-memory & Redis sync)
 	mu            sync.Mutex
@@ -281,15 +284,46 @@ func (s *ControlPlaneService) ReleaseConnection(userID string) {
 	}
 }
 
+func (s *ControlPlaneService) SetPool(pool *pgxpool.Pool) {
+	s.pool = pool
+}
+
 // RecordTelemetry stores bandwidth consumption records
-func (s *ControlPlaneService) RecordTelemetry(_ context.Context, userID, credentialID string, bytesIn, bytesOut int64, targetDomain string) error {
-	// In production, persists to usage_records table in PostgreSQL
+func (s *ControlPlaneService) RecordTelemetry(ctx context.Context, userID, credentialID string, bytesIn, bytesOut int64, targetDomain string) error {
+	if s.pool != nil {
+		id := "usg_" + uuid.New().String()[:12]
+		var credID *string
+		if credentialID != "" {
+			credID = &credentialID
+		}
+		query := `
+			INSERT INTO proxy_usage (id, user_id, credential_id, bytes_in, bytes_out, requests_count, target_domain, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+		`
+		_, err := s.pool.Exec(ctx, query, id, userID, credID, bytesIn, bytesOut, 1, targetDomain, time.Now())
+		return err
+	}
 	return nil
 }
 
 // RecordAbuseEvent stores rate limit and compliance violations
-func (s *ControlPlaneService) RecordAbuseEvent(_ context.Context, userID, clientIP, targetDomain, reason, severity string) error {
-	// In production, persists to abuse_events table in PostgreSQL
+func (s *ControlPlaneService) RecordAbuseEvent(ctx context.Context, userID, clientIP, targetDomain, reason, severity string) error {
+	if s.pool != nil {
+		id := "abz_" + uuid.New().String()[:12]
+		var uID *string
+		if userID != "" {
+			uID = &userID
+		}
+		if severity == "" {
+			severity = "medium"
+		}
+		query := `
+			INSERT INTO abuse_events (id, user_id, client_ip, target_domain, reason, severity, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7)
+		`
+		_, err := s.pool.Exec(ctx, query, id, uID, clientIP, targetDomain, reason, severity, time.Now())
+		return err
+	}
 	return nil
 }
 

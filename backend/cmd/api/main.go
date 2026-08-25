@@ -66,6 +66,7 @@ func main() {
 
 	// Control Plane Authorization Engine (Step 7)
 	controlPlaneService := controlplane.NewService(userRepo, credRepo, plansService, sessionService)
+	controlPlaneService.SetPool(db.Pool)
 	controlPlaneHandler := controlplane.NewHandler(controlPlaneService)
 
 	usageService := usage.NewService()
@@ -124,6 +125,10 @@ func main() {
 
 	// API v1 Routes
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
+			response.Success(w, "CloudPulse API is healthy", map[string]string{"status": "UP", "version": "1.0.0"})
+		})
+
 		// Public Auth
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/register", userHandler.Register)

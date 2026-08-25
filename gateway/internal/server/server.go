@@ -186,7 +186,10 @@ func (s *GatewayServer) resolvePolicy(ctx context.Context, creds *auth.ProxyCred
 
 func (s *GatewayServer) handleConnectTunnel(w http.ResponseWriter, r *http.Request, decision *policy.Decision) {
 	destHost := r.Host
-	if decision != nil && decision.UpstreamHost != "" && !strings.Contains(decision.UpstreamHost, "cloudpulse.net") {
+	if decision != nil && decision.UpstreamHost != "" &&
+		!strings.Contains(decision.UpstreamHost, "cloudpulse.net") &&
+		!strings.Contains(decision.UpstreamHost, "provider-network.net") &&
+		!strings.Contains(decision.UpstreamHost, "127.0.0.1") {
 		destHost = decision.UpstreamHost
 	}
 
@@ -250,7 +253,10 @@ func (s *GatewayServer) handleDirectProxy(w http.ResponseWriter, r *http.Request
 	outReq := r.Clone(r.Context())
 	outReq.RequestURI = ""
 
-	if decision != nil && decision.UpstreamHost != "" && !strings.Contains(decision.UpstreamHost, "cloudpulse.net") {
+	if decision != nil && decision.UpstreamHost != "" &&
+		!strings.Contains(decision.UpstreamHost, "cloudpulse.net") &&
+		!strings.Contains(decision.UpstreamHost, "provider-network.net") &&
+		!strings.Contains(decision.UpstreamHost, "127.0.0.1") {
 		outReq.URL.Host = decision.UpstreamHost
 		outReq.Host = decision.UpstreamHost
 	}
