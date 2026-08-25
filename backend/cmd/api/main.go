@@ -73,7 +73,7 @@ func main() {
 	providerService := providers.NewService()
 	providerHandler := providers.NewHandler(providerService)
 
-	adminService := admin.NewService()
+	adminService := admin.NewService(userRepo, credRepo, plansService)
 	adminHandler := admin.NewHandler(adminService)
 
 	auditService := audit.NewService()
@@ -153,6 +153,7 @@ func main() {
 			r.Route("/proxy-credentials", func(r chi.Router) {
 				r.Get("/", credHandler.ListProxyCredentials)
 				r.Post("/", credHandler.CreateProxyCredential)
+				r.Post("/{id}/reset", credHandler.ResetProxyCredential)
 				r.Delete("/{id}", credHandler.DeleteProxyCredential)
 			})
 
@@ -195,8 +196,14 @@ func main() {
 			// Audit Logs
 			r.Get("/audit/logs", auditHandler.List)
 
-			// Admin Control Plane
-			r.Get("/admin/overview", adminHandler.GetOverview)
+			// Admin Control Plane (Milestone 1)
+			r.Route("/admin", func(r chi.Router) {
+				r.Get("/overview", adminHandler.GetOverview)
+				r.Get("/users", adminHandler.ListUsers)
+				r.Post("/users/{id}/status", adminHandler.ToggleUserStatus)
+				r.Post("/users/{id}/plan", adminHandler.AssignUserPlan)
+				r.Post("/users/{id}/reset-credential", credHandler.ResetProxyCredential)
+			})
 		})
 	})
 

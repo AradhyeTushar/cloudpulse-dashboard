@@ -120,6 +120,32 @@ func (s *Service) ListProxyCredentials(ctx context.Context, userID string) ([]*P
 	return s.repo.ListProxyCredentials(ctx, userID)
 }
 
+func (s *Service) ResetProxyCredential(ctx context.Context, userID, id string) (*ProxyCredential, error) {
+	cred, err := s.repo.GetProxyCredentialByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if userID != "" && cred.UserID != userID {
+		return nil, errors.New("unauthorized to reset this credential")
+	}
+
+	rawPassword := GenerateRandomPassword()
+	passHash, _ := auth.HashPassword(rawPassword, nil)
+	randomUserSuffix := uuid.New().String()[:8]
+	generatedUsername := fmt.Sprintf("cp_%s", randomUserSuffix)
+
+	cred.Username = generatedUsername
+	cred.PasswordHash = passHash
+	cred.PlainPassword = rawPassword
+	cred.UpdatedAt = time.Now()
+
+	if err := s.repo.UpdateProxyCredential(ctx, cred); err != nil {
+		return nil, err
+	}
+	return cred, nil
+}
+
 func (s *Service) DeleteProxyCredential(ctx context.Context, userID, id string) error {
 	return s.repo.DeleteProxyCredential(ctx, userID, id)
 }

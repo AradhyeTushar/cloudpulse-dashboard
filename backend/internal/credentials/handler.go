@@ -80,6 +80,34 @@ func (h *Handler) DeleteProxyCredential(w http.ResponseWriter, r *http.Request) 
 	response.Success(w, "Proxy credential deleted", nil)
 }
 
+func (h *Handler) ResetProxyCredential(w http.ResponseWriter, r *http.Request) {
+	claims, ok := r.Context().Value("claims").(*auth.Claims)
+	if !ok || claims == nil {
+		response.Unauthorized(w, "Authentication required")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.BadRequest(w, "Missing credential ID")
+		return
+	}
+
+	// Admins can reset any, users only their own
+	userID := claims.UserID
+	if claims.Role == "admin" || claims.Role == "owner" {
+		userID = ""
+	}
+
+	cred, err := h.service.ResetProxyCredential(r.Context(), userID, id)
+	if err != nil {
+		response.NotFound(w, err.Error())
+		return
+	}
+
+	response.Success(w, "Proxy credential reset successfully", cred)
+}
+
 // =========================================================================
 // API KEYS HANDLERS
 // =========================================================================

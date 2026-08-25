@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -17,6 +18,7 @@ type Repository interface {
 	CreateProxyCredential(ctx context.Context, cred *ProxyCredential) error
 	GetProxyCredentialByID(ctx context.Context, id string) (*ProxyCredential, error)
 	ListProxyCredentials(ctx context.Context, userID string) ([]*ProxyCredential, error)
+	UpdateProxyCredential(ctx context.Context, cred *ProxyCredential) error
 	DeleteProxyCredential(ctx context.Context, userID, id string) error
 
 	// API Keys
@@ -85,7 +87,7 @@ func (r *postgresRepo) GetProxyCredentialByID(ctx context.Context, id string) (*
 }
 
 func (r *postgresRepo) ListProxyCredentials(ctx context.Context, userID string) ([]*ProxyCredential, error) {
-	query := `SELECT id, user_id, name, proxy_type, protocol, rotation_mode, session_duration_min, target_country, target_country_code, target_state, target_city, username, plain_password, ip_whitelist, status, created_at, updated_at FROM proxy_credentials WHERE user_id = $1 ORDER BY created_at DESC`
+	query := `SELECT id, user_id, name, proxy_type, protocol, rotation_mode, session_duration_min, target_country, target_country_code, target_state, target_city, username, plain_password, ip_whitelist, status, created_at, updated_at FROM proxy_credentials WHERE user_id = $1 OR $1 = '' ORDER BY created_at DESC`
 	rows, err := r.pool.Query(ctx, query, userID)
 	if err != nil {
 		return nil, err
@@ -112,8 +114,18 @@ func (r *postgresRepo) ListProxyCredentials(ctx context.Context, userID string) 
 	return result, nil
 }
 
+func (r *postgresRepo) UpdateProxyCredential(ctx context.Context, c *ProxyCredential) error {
+	query := `
+		UPDATE proxy_credentials 
+		SET username = $2, password_hash = $3, plain_password = $4, status = $5, updated_at = $6
+		WHERE id = $1
+	`
+	_, err := r.pool.Exec(ctx, query, c.ID, c.Username, c.PasswordHash, c.PlainPassword, c.Status, time.Now())
+	return err
+}
+
 func (r *postgresRepo) DeleteProxyCredential(ctx context.Context, userID, id string) error {
-	query := `DELETE FROM proxy_credentials WHERE id = $1 AND user_id = $2`
+	query := `DELETE FROM proxy_credentials WHERE id = $1 AND (user_id = $2 OR $2 = '')`
 	_, err := r.pool.Exec(ctx, query, id, userID)
 	return err
 }
@@ -135,7 +147,7 @@ func (r *postgresRepo) GetApiKeyByHash(ctx context.Context, secretHash string) (
 }
 
 func (r *postgresRepo) ListApiKeys(ctx context.Context, userID string) ([]*ApiKey, error) {
-	query := `SELECT id, user_id, name, prefix, scopes, last_used_at, expires_at, created_at FROM api_keys WHERE user_id = $1 ORDER BY created_at DESC`
+	query := `SELECT id, user_id, name, prefix, scopes, last_used_at, expires_at, created_at FROM api_keys WHERE user_id = $1 OR $1 = '' ORDER BY created_at DESC`
 	rows, err := r.pool.Query(ctx, query, userID)
 	if err != nil {
 		return nil, err
@@ -154,7 +166,7 @@ func (r *postgresRepo) ListApiKeys(ctx context.Context, userID string) ([]*ApiKe
 }
 
 func (r *postgresRepo) DeleteApiKey(ctx context.Context, userID, id string) error {
-	query := `DELETE FROM api_keys WHERE id = $1 AND user_id = $2`
+	query := `DELETE FROM api_keys WHERE id = $1 AND (user_id = $2 OR $2 = '')`
 	_, err := r.pool.Exec(ctx, query, id, userID)
 	return err
 }
@@ -187,6 +199,13 @@ func (m *memoryRepo) ListProxyCredentials(_ context.Context, userID string) ([]*
 		}
 	}
 	return result, nil
+}
+
+func (m *memoryRepo) UpdateProxyCredential(_ context.Context, c *ProxyCredential) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.proxyCreds[c.ID] = c
+	return nil
 }
 
 func (m *memoryRepo) DeleteProxyCredential(_ context.Context, userID, id string) error {
