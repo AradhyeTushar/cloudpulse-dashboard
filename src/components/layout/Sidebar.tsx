@@ -77,7 +77,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 <path d="m8 17 4 4 4-4" />
               </svg>
             </div>
-            <span>NexusHost</span>
+            <span>CloudPulse</span>
           </NavLink>
         </div>
 

@@ -1,4 +1,4 @@
-# NexusHost - Cloud Hosting & VPS Control Panel
+# CloudPulse - Cloud Hosting & VPS Control Panel
 
 A next-generation Cloud Hosting & VPS Management Dashboard built with **React**, **TypeScript**, and **Vite**.
 
@@ -57,7 +57,7 @@ A next-generation Cloud Hosting & VPS Management Dashboard built with **React**,
 ```bash
 # Clone repository
 git clone <repository-url>
-cd cloud-hosting-dashboard
+cd cloudpulse-dashboard
 
 # Install dependencies
 npm install

@@ -6,7 +6,7 @@ import { useToast } from '../../context/ToastContext';
 export const SettingsApi: React.FC = () => {
   const { showToast } = useToast();
 
-  const curlExample = `curl -X GET "https://api.nexuscloud.io/v1/vps" \\
+  const curlExample = `curl -X GET "https://api.cloudpulse.io/v1/vps" \\
   -H "Authorization: Bearer nxs_live_98a72c1e89b24" \\
   -H "Content-Type: application/json"`;
 

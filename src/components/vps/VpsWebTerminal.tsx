@@ -10,7 +10,7 @@ export const VpsWebTerminal: React.FC<VpsWebTerminalProps> = ({ vps }) => {
   const [history, setHistory] = useState<Array<{ type: 'input' | 'output'; text: string }>>([
     {
       type: 'output',
-      text: `Connected to ${vps.hostname} (${vps.ipAddress})\nNexusCloud Secure Web Terminal v2.4\nType 'help' to see available commands.\n`,
+      text: `Connected to ${vps.hostname} (${vps.ipAddress})\nCloudPulse Secure Web Terminal v2.4\nType 'help' to see available commands.\n`,
     },
   ]);
 
