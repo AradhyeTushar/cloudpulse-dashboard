@@ -22,10 +22,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
 )
 
 // =========================================================================
-// PROMETHEUS METRICS (Data Plane Telemetry)
+// PROMETHEUS METRICS (Data Plane & Fast-Path Telemetry)
 // =========================================================================
 
 var (
@@ -52,6 +53,20 @@ var (
 		},
 	)
 
+	sessionCacheHits = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "cloudpulse_gateway_session_cache_hits_total",
+			Help: "Total fast-path session cache hits (bypassing Control Plane HTTP roundtrip)",
+		},
+	)
+
+	sessionCacheMisses = promauto.NewCounter(
+		prometheus.CounterOpts{
+			Name: "cloudpulse_gateway_session_cache_misses_total",
+			Help: "Total session cache misses (requiring Control Plane allocation)",
+		},
+	)
+
 	dialLatency = promauto.NewHistogram(
 		prometheus.HistogramOpts{
 			Name:    "cloudpulse_gateway_dial_duration_seconds",
@@ -68,7 +83,63 @@ var (
 	)
 )
 
-// RateLimiter tracks per-IP request frequency
+// =========================================================================
+// DATA STRUCTURES
+// =========================================================================
+
+type AuthDecision struct {
+	Allowed             bool      `json:"allowed"`
+	StatusCode          int       `json:"status_code"`
+	Reason              string    `json:"reason"`
+	UserID              string    `json:"user_id"`
+	CredentialID        string    `json:"credential_id"`
+	SessionID           string    `json:"session_id"`
+	AssignedExitIP      string    `json:"assigned_exit_ip"`
+	UpstreamProvider    string    `json:"upstream_provider"`
+	UpstreamHost        string    `json:"upstream_host"`
+	RemainingQuotaBytes int64     `json:"remaining_quota_bytes"`
+	ExpiresAt           time.Time `json:"expires_at"`
+}
+
+// Local Policy Cache to avoid redundant Control Plane roundtrips
+type PolicyCache struct {
+	mu      sync.RWMutex
+	entries map[string]*cachedPolicy
+	ttl     time.Duration
+}
+
+type cachedPolicy struct {
+	decision  *AuthDecision
+	expiresAt time.Time
+}
+
+func NewPolicyCache(ttl time.Duration) *PolicyCache {
+	return &PolicyCache{
+		entries: make(map[string]*cachedPolicy),
+		ttl:     ttl,
+	}
+}
+
+func (c *PolicyCache) Get(key string) (*AuthDecision, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	entry, exists := c.entries[key]
+	if !exists || time.Now().After(entry.expiresAt) {
+		return nil, false
+	}
+	return entry.decision, true
+}
+
+func (c *PolicyCache) Set(key string, decision *AuthDecision) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.entries[key] = &cachedPolicy{
+		decision:  decision,
+		expiresAt: time.Now().Add(c.ttl),
+	}
+}
+
+// Edge Rate Limiter
 type IPRateLimiter struct {
 	mu      sync.Mutex
 	limits  map[string][]time.Time
@@ -115,27 +186,33 @@ type Gateway struct {
 	activeCount     int64
 	httpClient      *http.Client
 	rateLimiter     *IPRateLimiter
-}
-
-type AuthDecision struct {
-	Allowed             bool   `json:"allowed"`
-	StatusCode          int    `json:"status_code"`
-	Reason              string `json:"reason"`
-	UserID              string `json:"user_id"`
-	CredentialID        string `json:"credential_id"`
-	SessionID           string `json:"session_id"`
-	AssignedExitIP      string `json:"assigned_exit_ip"`
-	UpstreamProvider    string `json:"upstream_provider"`
-	UpstreamHost        string `json:"upstream_host"`
-	RemainingQuotaBytes int64  `json:"remaining_quota_bytes"`
+	policyCache     *PolicyCache
+	redisClient     *redis.Client
+	inMemSessions   map[string]*AuthDecision
+	sessMu          sync.RWMutex
 }
 
 func main() {
-	log.Println("[GATEWAY BOOT] Starting CloudPulse High-Throughput Proxy Gateway...")
+	log.Println("[GATEWAY BOOT] Starting CloudPulse High-Throughput Proxy Gateway with Fast-Path Session Manager...")
 
 	httpPort := getEnv("GATEWAY_HTTP_PORT", "8000")
 	metricsPort := getEnv("GATEWAY_METRICS_PORT", "9100")
 	controlPlaneURL := getEnv("CONTROL_PLANE_URL", "http://localhost:8080")
+	redisURL := getEnv("REDIS_URL", "redis://localhost:6379")
+
+	var rClient *redis.Client
+	opt, err := redis.ParseURL(redisURL)
+	if err == nil {
+		rClient = redis.NewClient(opt)
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		if err := rClient.Ping(ctx).Err(); err != nil {
+			log.Printf("[REDIS INFO] Running with in-memory session fast path (Redis not reachable: %v)", err)
+			rClient = nil
+		} else {
+			log.Println("[REDIS CONNECTED] Direct Redis Session Fast-Path active")
+		}
+		cancel()
+	}
 
 	gw := &Gateway{
 		httpPort:        httpPort,
@@ -144,16 +221,19 @@ func main() {
 		httpClient: &http.Client{
 			Timeout: 5 * time.Second,
 		},
-		rateLimiter: NewIPRateLimiter(120, time.Minute),
+		rateLimiter:   NewIPRateLimiter(120, time.Minute),
+		policyCache:   NewPolicyCache(30 * time.Second), // 30s local policy cache
+		redisClient:   rClient,
+		inMemSessions: make(map[string]*AuthDecision),
 	}
 
-	// 1. Start Prometheus Metrics Listener
+	// 1. Prometheus Telemetry Listener
 	go func() {
 		metricsMux := http.NewServeMux()
 		metricsMux.Handle("/metrics", promhttp.Handler())
 		metricsMux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
-			_, _ = w.Write([]byte(`{"status":"UP","gateway":"online"}`))
+			_, _ = w.Write([]byte(`{"status":"UP","gateway":"online","fast_path":true}`))
 		})
 
 		log.Printf("[GATEWAY METRICS] Exposing Prometheus telemetry on :%s", metricsPort)
@@ -162,7 +242,7 @@ func main() {
 		}
 	}()
 
-	// 2. Start HTTP CONNECT Proxy Tunnel Server with Timeouts
+	// 2. HTTP CONNECT Proxy Tunnel Server
 	proxyServer := &http.Server{
 		Addr:         ":" + httpPort,
 		Handler:      http.HandlerFunc(gw.handleProxyRequest),
@@ -172,7 +252,7 @@ func main() {
 	}
 
 	go func() {
-		log.Printf("[GATEWAY READY] HTTP/HTTPS Proxy Tunnel listening on :%s (Connected to Control Plane %s)", httpPort, controlPlaneURL)
+		log.Printf("[GATEWAY READY] High-Throughput Proxy Tunnel listening on :%s", httpPort)
 		if err := proxyServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("[GATEWAY FATAL] Proxy listener failed: %v", err)
 		}
@@ -190,15 +270,17 @@ func main() {
 	log.Println("[GATEWAY EXIT] Gateway cleanly stopped.")
 }
 
+// =========================================================================
+// REQUEST HANDLER PIPELINE (FAST-PATH SESSION MANAGER)
+// =========================================================================
+
 func (gw *Gateway) handleProxyRequest(w http.ResponseWriter, r *http.Request) {
 	clientIP, _, _ := net.SplitHostPort(r.RemoteAddr)
 	if clientIP == "" {
 		clientIP = r.RemoteAddr
 	}
 
-	// -------------------------------------------------------------------------
-	// 1. RATE LIMITING & ABUSE GUARD
-	// -------------------------------------------------------------------------
+	// Step 1: Edge Rate Limiting
 	if !gw.rateLimiter.Allow(clientIP) {
 		rateLimitHits.Inc()
 		proxyRequestsTotal.WithLabelValues(r.Method, "rate_limited").Inc()
@@ -207,9 +289,7 @@ func (gw *Gateway) handleProxyRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// -------------------------------------------------------------------------
-	// 2. AUTHENTICATION EXTRACTION
-	// -------------------------------------------------------------------------
+	// Step 2: Extract Basic Credentials & Session Parameters
 	username, password := gw.extractCredentials(r)
 	if username == "" && password == "" {
 		proxyRequestsTotal.WithLabelValues(r.Method, "unauthorized").Inc()
@@ -230,40 +310,122 @@ func (gw *Gateway) handleProxyRequest(w http.ResponseWriter, r *http.Request) {
 		targetPort = 443
 	}
 
-	// -------------------------------------------------------------------------
-	// 3. CONTROL PLANE HANDSHAKE & POLICY CHECK
-	// -------------------------------------------------------------------------
-	decision, err := gw.authorizeWithControlPlane(r.Context(), username, password, clientIP, targetHost, targetPort, r.Method)
-	if err != nil {
-		log.Printf("[CONTROL PLANE WARNING] Handshake unreachable: %v (falling back to direct transit)", err)
-	} else if !decision.Allowed {
+	// Parse optional session ID or country embedded in username (e.g. "usr-country-US-session-abc123")
+	sessionID := extractSessionID(username)
+
+	// Step 3 & 4: Fast-Path Session Check (Redis / In-Memory Session Manager)
+	decision, hit := gw.resolveSessionFastPath(r.Context(), sessionID, username, password, clientIP, targetHost, targetPort, r.Method)
+	if hit {
+		sessionCacheHits.Inc()
+	} else {
+		sessionCacheMisses.Inc()
+	}
+
+	if decision == nil || !decision.Allowed {
 		proxyRequestsTotal.WithLabelValues(r.Method, "policy_rejected").Inc()
-		status := decision.StatusCode
-		if status == 0 {
-			status = http.StatusForbidden
+		status := http.StatusForbidden
+		reason := "Policy Blocked"
+		if decision != nil {
+			if decision.StatusCode != 0 {
+				status = decision.StatusCode
+			}
+			if decision.Reason != "" {
+				reason = decision.Reason
+			}
+			if status == 401 || status == 403 {
+				gw.reportAbuse(decision.UserID, clientIP, targetHost, reason, "high")
+			}
 		}
-
-		if status == 401 || status == 403 {
-			gw.reportAbuse(decision.UserID, clientIP, targetHost, decision.Reason, "high")
-		}
-
-		http.Error(w, fmt.Sprintf("CloudPulse Policy Block: %s", decision.Reason), status)
+		http.Error(w, fmt.Sprintf("CloudPulse Policy Block: %s", reason), status)
 		return
 	}
 
-	// Connection accounting release
-	if decision != nil && decision.UserID != "" {
+	// Active Concurrency Accounting
+	if decision.UserID != "" {
 		defer gw.releaseConnection(decision.UserID)
 	}
 
-	// -------------------------------------------------------------------------
-	// 4. DATA PLANE TUNNELING / UPSTREAM FORWARDING
-	// -------------------------------------------------------------------------
+	// Step 5: Data Plane Tunneling (Direct Transit to Upstream Provider)
 	if r.Method == http.MethodConnect {
 		gw.handleConnectTunnel(w, r, decision)
 	} else {
 		gw.handleDirectProxy(w, r, decision)
 	}
+}
+
+// resolveSessionFastPath checks:
+// 1. Existing Session in Redis / Local Memory (Fast Path -> Reuse immediately <0.5ms!)
+// 2. Cold Path -> Calls Control Plane, caches policy & session, returns allocation
+func (gw *Gateway) resolveSessionFastPath(ctx context.Context, sessionID, user, pass, clientIP, host string, port int, method string) (*AuthDecision, bool) {
+	// 1. FAST PATH: Check Session Manager (Redis / In-Memory)
+	if sessionID != "" {
+		// Check Redis
+		if gw.redisClient != nil {
+			redisKey := fmt.Sprintf("session:%s", sessionID)
+			val, err := gw.redisClient.Get(ctx, redisKey).Result()
+			if err == nil && val != "" {
+				var cached AuthDecision
+				if json.Unmarshal([]byte(val), &cached) == nil && cached.Allowed {
+					return &cached, true // Fast Path Reused!
+				}
+			}
+		}
+
+		// Check In-Memory Fast Cache
+		gw.sessMu.RLock()
+		if existing, exists := gw.inMemSessions[sessionID]; exists {
+			if time.Now().Before(existing.ExpiresAt) && existing.Allowed {
+				gw.sessMu.RUnlock()
+				return existing, true // Fast Path Reused!
+			}
+		}
+		gw.sessMu.RUnlock()
+	}
+
+	// 2. Check Local Policy Cache for this Credential (30s cache)
+	credKey := fmt.Sprintf("cred:%s:%s:%s", user, pass, clientIP)
+	if cachedDec, exists := gw.policyCache.Get(credKey); exists && !cachedDec.Allowed {
+		return cachedDec, true // Fast Path Negative Policy Rejection!
+	}
+
+	// 3. COLD PATH: Handshake with Control Plane Engine
+	decision, err := gw.authorizeWithControlPlane(ctx, user, pass, clientIP, host, port, method)
+	if err != nil {
+		log.Printf("[CONTROL PLANE WARNING] Handshake error: %v", err)
+		return nil, false
+	}
+
+	// Cache Credential Policy
+	gw.policyCache.Set(credKey, decision)
+
+	// Save to Session Manager (Redis & In-Memory)
+	if decision.Allowed && decision.SessionID != "" {
+		decision.ExpiresAt = time.Now().Add(15 * time.Minute)
+
+		if gw.redisClient != nil {
+			redisKey := fmt.Sprintf("session:%s", decision.SessionID)
+			data, err := json.Marshal(decision)
+			if err == nil {
+				_ = gw.redisClient.Set(ctx, redisKey, data, 15*time.Minute).Err()
+			}
+		}
+
+		gw.sessMu.Lock()
+		gw.inMemSessions[decision.SessionID] = decision
+		gw.sessMu.Unlock()
+	}
+
+	return decision, false
+}
+
+func extractSessionID(username string) string {
+	if strings.Contains(username, "session-") {
+		parts := strings.Split(username, "session-")
+		if len(parts) > 1 {
+			return strings.Split(parts[1], "-")[0]
+		}
+	}
+	return ""
 }
 
 func (gw *Gateway) extractCredentials(r *http.Request) (string, string) {
@@ -378,7 +540,6 @@ func (gw *Gateway) reportAbuse(userID, clientIP, targetDomain, reason, severity 
 func (gw *Gateway) handleConnectTunnel(w http.ResponseWriter, r *http.Request, decision *AuthDecision) {
 	dialStart := time.Now()
 
-	// Dial target destination (or upstream provider if configured)
 	destHost := r.Host
 	if decision != nil && decision.UpstreamHost != "" && !strings.Contains(decision.UpstreamHost, "cloudpulse.net") {
 		destHost = decision.UpstreamHost
@@ -410,10 +571,8 @@ func (gw *Gateway) handleConnectTunnel(w http.ResponseWriter, r *http.Request, d
 	}
 	defer clientConn.Close()
 
-	// Establish tunnel response to client
 	_, _ = clientConn.Write([]byte("HTTP/1.1 200 Connection Established\r\n\r\n"))
 
-	// Connection Accounting
 	atomic.AddInt64(&gw.activeCount, 1)
 	activeTunnels.Inc()
 	defer func() {
@@ -423,7 +582,6 @@ func (gw *Gateway) handleConnectTunnel(w http.ResponseWriter, r *http.Request, d
 
 	proxyRequestsTotal.WithLabelValues("CONNECT", "success").Inc()
 
-	// Bi-directional streaming with accurate Bandwidth Accounting
 	var bytesIn, bytesOut int64
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -450,8 +608,6 @@ func (gw *Gateway) handleConnectTunnel(w http.ResponseWriter, r *http.Request, d
 	}()
 
 	wg.Wait()
-
-	// Report Bandwidth Accounting Telemetry
 	gw.reportTelemetry(userID, credID, bytesIn, bytesOut, r.Host)
 }
 
