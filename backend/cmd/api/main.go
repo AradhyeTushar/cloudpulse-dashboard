@@ -84,12 +84,45 @@ func main() {
 
 	rateLimiter := abuse.NewRateLimiter(120) // 120 requests/minute per IP
 
-	// 4. Seed default test user for instantaneous local development & API access
-	_, _ = userService.Register(ctx, &users.RegisterRequest{
+	// 4. Seed default test users and deterministic proxy credentials
+	u1, _ := userService.Register(ctx, &users.RegisterRequest{
 		Name:     "Alex Mercer",
 		Email:    "alex.mercer@cloudinfra.io",
 		Password: "Password123!",
 	})
+	if u1 == nil {
+		if ex, err := userRepo.GetByEmail(ctx, "alex.mercer@cloudinfra.io"); err == nil {
+			_ = credService.SeedProxyCredential(ctx, ex.ID, "cp_1638ac43", "p_sec_0068cfdb54424bbf", "Alex US Residential Grid", "United States")
+		}
+	} else {
+		_ = credService.SeedProxyCredential(ctx, u1.User.ID, "cp_1638ac43", "p_sec_0068cfdb54424bbf", "Alex US Residential Grid", "United States")
+	}
+
+	u2, _ := userService.Register(ctx, &users.RegisterRequest{
+		Name:     "CloudPulse Operator",
+		Email:    "admin.operator@cloudpulse.io",
+		Password: "AdminSecurePass123!",
+	})
+	if u2 == nil {
+		if ex, err := userRepo.GetByEmail(ctx, "admin.operator@cloudpulse.io"); err == nil {
+			_ = credService.SeedProxyCredential(ctx, ex.ID, "cp_b5033187", "p_sec_d2a742fbf1e60994", "Admin Master Gateway Credential", "Germany")
+		}
+	} else {
+		_ = credService.SeedProxyCredential(ctx, u2.User.ID, "cp_b5033187", "p_sec_d2a742fbf1e60994", "Admin Master Gateway Credential", "Germany")
+	}
+
+	u3, _ := userService.Register(ctx, &users.RegisterRequest{
+		Name:     "Enterprise Validator",
+		Email:    "validator@enterprise.com",
+		Password: "DeployPassword123!",
+	})
+	if u3 == nil {
+		if ex, err := userRepo.GetByEmail(ctx, "validator@enterprise.com"); err == nil {
+			_ = credService.SeedProxyCredential(ctx, ex.ID, "cp_76b59065", "p_sec_a9cfccf6a8bba986", "Validator Automated Probe", "India")
+		}
+	} else {
+		_ = credService.SeedProxyCredential(ctx, u3.User.ID, "cp_76b59065", "p_sec_a9cfccf6a8bba986", "Validator Automated Probe", "India")
+	}
 
 	// 5. Router Setup
 	r := chi.NewRouter()

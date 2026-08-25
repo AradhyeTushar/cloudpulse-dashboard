@@ -125,6 +125,43 @@ func (s *Service) CreateProxyCredential(ctx context.Context, userID string, req 
 	return cred, nil
 }
 
+func (s *Service) SeedProxyCredential(ctx context.Context, userID, username, password, name, country string) error {
+	creds, _ := s.repo.ListProxyCredentials(ctx, userID)
+	for _, c := range creds {
+		if c.Username == username {
+			return nil
+		}
+	}
+
+	passHash, err := auth.HashPassword(password, nil)
+	if err != nil {
+		return err
+	}
+
+	cred := &ProxyCredential{
+		ID:                 "cred_" + uuid.New().String()[:8],
+		UserID:             userID,
+		Name:               name,
+		ProxyType:          "residential",
+		Protocol:           "http",
+		RotationMode:       "rotating",
+		SessionDurationMin: 10,
+		TargetCountry:      country,
+		TargetCountryCode:  "US",
+		Username:           username,
+		PasswordHash:       passHash,
+		PlainPassword:      password,
+		Host:               "pr.cloudpulse.net",
+		Port:               8000,
+		IPWhitelist:        []string{},
+		Status:             "active",
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
+	}
+
+	return s.repo.CreateProxyCredential(ctx, cred)
+}
+
 func (s *Service) ListProxyCredentials(ctx context.Context, userID string) ([]*ProxyCredential, error) {
 	return s.repo.ListProxyCredentials(ctx, userID)
 }
