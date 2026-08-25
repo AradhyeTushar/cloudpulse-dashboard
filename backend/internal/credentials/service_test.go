@@ -7,48 +7,68 @@ import (
 )
 
 func TestCredentialsService(t *testing.T) {
-	service := NewService()
+	repo := NewMemoryRepository()
+	service := NewService(repo)
 	ctx := context.Background()
 
 	// 1. Create API key
-	resp, err := service.Create(ctx, "usr_123", &CreateCredentialRequest{
+	resp, err := service.CreateApiKey(ctx, "usr_123", &CreateApiKeyRequest{
 		Name:      "Deployment Secret",
-		Scopes:    []string{"vps:read", "vps:deploy"},
+		Scopes:    []string{"proxy:read", "proxy:write"},
 		ExpiresIn: 30,
 	})
 	if err != nil {
-		t.Fatalf("Create credential failed: %v", err)
+		t.Fatalf("Create API key failed: %v", err)
 	}
 
-	if !strings.HasPrefix(resp.PlainText, "cp_live_") {
-		t.Errorf("Expected secret prefix cp_live_, got %s", resp.PlainText)
+	if !strings.HasPrefix(resp.PlainTextSecret, "cp_live_") {
+		t.Errorf("Expected secret prefix cp_live_, got %s", resp.PlainTextSecret)
 	}
-	if resp.Credential.Prefix == "" {
+	if resp.ApiKey.Prefix == "" {
 		t.Errorf("Expected non-empty masked prefix")
 	}
 
 	// 2. Validate secret
-	cred, err := service.ValidateSecret(ctx, resp.PlainText)
+	key, err := service.ValidateSecret(ctx, resp.PlainTextSecret)
 	if err != nil {
 		t.Fatalf("ValidateSecret failed: %v", err)
 	}
-	if cred.UserID != "usr_123" {
-		t.Errorf("Expected user ID usr_123, got %s", cred.UserID)
+	if key.UserID != "usr_123" {
+		t.Errorf("Expected user ID usr_123, got %s", key.UserID)
 	}
 
-	// 3. List
-	list, err := service.List(ctx, "usr_123")
-	if err != nil || len(list) != 1 {
-		t.Fatalf("Expected 1 credential in list, got %d", len(list))
+	// 3. Create Proxy Credential
+	pCred, err := service.CreateProxyCredential(ctx, "usr_123", &CreateProxyCredentialRequest{
+		Name:               "US Residential Pool",
+		ProxyType:          "residential",
+		Protocol:           "http",
+		RotationMode:       "sticky",
+		SessionDurationMin: 15,
+		TargetCountry:      "United States",
+		TargetCountryCode:  "US",
+	})
+	if err != nil {
+		t.Fatalf("CreateProxyCredential failed: %v", err)
+	}
+	if !strings.HasPrefix(pCred.Username, "cp_") {
+		t.Errorf("Expected username prefix cp_, got %s", pCred.Username)
+	}
+	if pCred.PlainPassword == "" {
+		t.Errorf("Expected non-empty generated password")
 	}
 
-	// 4. Delete
-	if err := service.Delete(ctx, "usr_123", resp.Credential.ID); err != nil {
-		t.Fatalf("Delete credential failed: %v", err)
+	// 4. List Proxy Credentials
+	pList, err := service.ListProxyCredentials(ctx, "usr_123")
+	if err != nil || len(pList) != 1 {
+		t.Fatalf("Expected 1 proxy credential in list, got %d", len(pList))
 	}
 
-	_, err = service.ValidateSecret(ctx, resp.PlainText)
-	if err == nil {
-		t.Errorf("Expected validation to fail after deletion")
+	// 5. Delete Proxy Credential
+	if err := service.DeleteProxyCredential(ctx, "usr_123", pCred.ID); err != nil {
+		t.Fatalf("DeleteProxyCredential failed: %v", err)
+	}
+	pListAfter, _ := service.ListProxyCredentials(ctx, "usr_123")
+	if len(pListAfter) != 0 {
+		t.Errorf("Expected 0 proxy credentials after deletion, got %d", len(pListAfter))
 	}
 }

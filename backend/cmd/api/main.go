@@ -45,8 +45,9 @@ func main() {
 	}
 	defer db.Close()
 
-	// 3. Initialize Services
+	// 3. Initialize Services with PostgreSQL repositories
 	tokenService := auth.NewTokenService(cfg.JWTSecret, cfg.JWTExpiry)
+
 	userRepo := users.NewRepository(db.Pool)
 	userService := users.NewService(userRepo, tokenService)
 	userHandler := users.NewHandler(userService)
@@ -54,7 +55,8 @@ func main() {
 	plansService := plans.NewService()
 	plansHandler := plans.NewHandler(plansService)
 
-	credService := credentials.NewService()
+	credRepo := credentials.NewRepository(db.Pool)
+	credService := credentials.NewService(credRepo)
 	credHandler := credentials.NewHandler(credService)
 
 	sessionService := sessions.NewService(db.Redis)
@@ -136,17 +138,31 @@ func main() {
 				r.Post("/password", userHandler.ChangePassword)
 			})
 
+			// Proxy Credentials (proxy_credentials table)
+			r.Route("/proxy-credentials", func(r chi.Router) {
+				r.Get("/", credHandler.ListProxyCredentials)
+				r.Post("/", credHandler.CreateProxyCredential)
+				r.Delete("/{id}", credHandler.DeleteProxyCredential)
+			})
+
+			// API Keys (api_keys table)
+			r.Route("/api-keys", func(r chi.Router) {
+				r.Get("/", credHandler.ListApiKeys)
+				r.Post("/", credHandler.CreateApiKey)
+				r.Delete("/{id}", credHandler.DeleteApiKey)
+			})
+
+			// Backward compatibility alias for /credentials
+			r.Route("/credentials", func(r chi.Router) {
+				r.Get("/", credHandler.ListApiKeys)
+				r.Post("/", credHandler.CreateApiKey)
+				r.Delete("/{id}", credHandler.DeleteApiKey)
+			})
+
 			// Subscriptions
 			r.Route("/billing/subscriptions", func(r chi.Router) {
 				r.Get("/", plansHandler.ListSubscriptions)
 				r.Post("/", plansHandler.CreateSubscription)
-			})
-
-			// API Credentials (keys)
-			r.Route("/credentials", func(r chi.Router) {
-				r.Get("/", credHandler.List)
-				r.Post("/", credHandler.Create)
-				r.Delete("/{id}", credHandler.Delete)
 			})
 
 			// Sessions

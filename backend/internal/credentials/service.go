@@ -7,34 +7,33 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"sync"
 	"time"
 
+	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/auth"
 	"github.com/google/uuid"
 )
 
-var (
-	ErrCredentialNotFound = errors.New("API credential not found")
-)
-
 type Service struct {
-	mu          sync.RWMutex
-	credentials map[string]*ApiCredential
+	repo Repository
 }
 
-func NewService() *Service {
-	return &Service{
-		credentials: make(map[string]*ApiCredential),
-	}
+func NewService(repo Repository) *Service {
+	return &Service{repo: repo}
 }
 
-// GenerateSecret creates a cryptographically secure random secret token
+// Generate random secret token
 func GenerateSecret() (string, error) {
-	bytes := make([]byte, 24)
+	bytes := make([]byte, 20)
 	if _, err := rand.Read(bytes); err != nil {
 		return "", err
 	}
 	return fmt.Sprintf("cp_live_%s", hex.EncodeToString(bytes)), nil
+}
+
+func GenerateRandomPassword() string {
+	bytes := make([]byte, 8)
+	_, _ = rand.Read(bytes)
+	return "p_sec_" + hex.EncodeToString(bytes)
 }
 
 func HashSecret(secret string) string {
@@ -42,9 +41,96 @@ func HashSecret(secret string) string {
 	return hex.EncodeToString(hash[:])
 }
 
-func (s *Service) Create(ctx context.Context, userID string, req *CreateCredentialRequest) (*CreateCredentialResponse, error) {
+// =========================================================================
+// PROXY CREDENTIALS (proxy_credentials table)
+// =========================================================================
+
+func (s *Service) CreateProxyCredential(ctx context.Context, userID string, req *CreateProxyCredentialRequest) (*ProxyCredential, error) {
 	if req.Name == "" {
-		return nil, errors.New("credential name is required")
+		return nil, errors.New("proxy endpoint name is required")
+	}
+
+	proxyType := req.ProxyType
+	if proxyType == "" {
+		proxyType = "residential"
+	}
+	protocol := req.Protocol
+	if protocol == "" {
+		protocol = "http"
+	}
+	rotationMode := req.RotationMode
+	if rotationMode == "" {
+		rotationMode = "rotating"
+	}
+	targetCountry := req.TargetCountry
+	if targetCountry == "" {
+		targetCountry = "United States"
+	}
+	targetCountryCode := req.TargetCountryCode
+	if targetCountryCode == "" {
+		targetCountryCode = "US"
+	}
+
+	rawPassword := GenerateRandomPassword()
+	passHash, _ := auth.HashPassword(rawPassword, nil)
+
+	randomUserSuffix := uuid.New().String()[:8]
+	generatedUsername := fmt.Sprintf("cp_%s", randomUserSuffix)
+
+	host := "pr.cloudpulse.net"
+	port := 8000
+	if proxyType == "datacenter" {
+		host = "dc.cloudpulse.net"
+	}
+	if protocol == "socks5" {
+		port = 1080
+	}
+
+	cred := &ProxyCredential{
+		ID:                 "pcred_" + uuid.New().String()[:10],
+		UserID:             userID,
+		Name:               req.Name,
+		ProxyType:          proxyType,
+		Protocol:           protocol,
+		RotationMode:       rotationMode,
+		SessionDurationMin: req.SessionDurationMin,
+		TargetCountry:      targetCountry,
+		TargetCountryCode:  targetCountryCode,
+		TargetState:        req.TargetState,
+		TargetCity:         req.TargetCity,
+		Username:           generatedUsername,
+		PasswordHash:       passHash,
+		PlainPassword:      rawPassword,
+		Host:               host,
+		Port:               port,
+		IPWhitelist:        req.IPWhitelist,
+		Status:             "active",
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
+	}
+
+	if err := s.repo.CreateProxyCredential(ctx, cred); err != nil {
+		return nil, err
+	}
+
+	return cred, nil
+}
+
+func (s *Service) ListProxyCredentials(ctx context.Context, userID string) ([]*ProxyCredential, error) {
+	return s.repo.ListProxyCredentials(ctx, userID)
+}
+
+func (s *Service) DeleteProxyCredential(ctx context.Context, userID, id string) error {
+	return s.repo.DeleteProxyCredential(ctx, userID, id)
+}
+
+// =========================================================================
+// API KEYS (api_keys table)
+// =========================================================================
+
+func (s *Service) CreateApiKey(ctx context.Context, userID string, req *CreateApiKeyRequest) (*CreateApiKeyResponse, error) {
+	if req.Name == "" {
+		return nil, errors.New("API key name is required")
 	}
 
 	secret, err := GenerateSecret()
@@ -61,8 +147,8 @@ func (s *Service) Create(ctx context.Context, userID string, req *CreateCredenti
 		expiresAt = &exp
 	}
 
-	cred := &ApiCredential{
-		ID:         "cred_" + uuid.New().String()[:12],
+	key := &ApiKey{
+		ID:         "key_" + uuid.New().String()[:10],
 		UserID:     userID,
 		Name:       req.Name,
 		Prefix:     prefix,
@@ -72,58 +158,25 @@ func (s *Service) Create(ctx context.Context, userID string, req *CreateCredenti
 		CreatedAt:  time.Now(),
 	}
 
-	s.mu.Lock()
-	s.credentials[cred.ID] = cred
-	s.mu.Unlock()
+	if err := s.repo.CreateApiKey(ctx, key); err != nil {
+		return nil, err
+	}
 
-	return &CreateCredentialResponse{
-		Credential: cred,
-		PlainText:  secret,
+	return &CreateApiKeyResponse{
+		ApiKey:          key,
+		PlainTextSecret: secret,
 	}, nil
 }
 
-func (s *Service) List(ctx context.Context, userID string) ([]*ApiCredential, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-
-	var result []*ApiCredential
-	for _, cred := range s.credentials {
-		if cred.UserID == userID {
-			result = append(result, cred)
-		}
-	}
-	return result, nil
+func (s *Service) ListApiKeys(ctx context.Context, userID string) ([]*ApiKey, error) {
+	return s.repo.ListApiKeys(ctx, userID)
 }
 
-func (s *Service) Delete(ctx context.Context, userID, credentialID string) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	cred, exists := s.credentials[credentialID]
-	if !exists || cred.UserID != userID {
-		return ErrCredentialNotFound
-	}
-
-	delete(s.credentials, credentialID)
-	return nil
+func (s *Service) DeleteApiKey(ctx context.Context, userID, id string) error {
+	return s.repo.DeleteApiKey(ctx, userID, id)
 }
 
-func (s *Service) ValidateSecret(ctx context.Context, plainTextSecret string) (*ApiCredential, error) {
+func (s *Service) ValidateSecret(ctx context.Context, plainTextSecret string) (*ApiKey, error) {
 	secretHash := HashSecret(plainTextSecret)
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	for _, cred := range s.credentials {
-		if cred.SecretHash == secretHash {
-			if cred.ExpiresAt != nil && time.Now().After(*cred.ExpiresAt) {
-				return nil, errors.New("API credential has expired")
-			}
-			now := time.Now()
-			cred.LastUsedAt = &now
-			return cred, nil
-		}
-	}
-
-	return nil, ErrCredentialNotFound
+	return s.repo.GetApiKeyByHash(ctx, secretHash)
 }
