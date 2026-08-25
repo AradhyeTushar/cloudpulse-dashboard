@@ -167,6 +167,20 @@ export const SubscriptionsView: React.FC = () => {
         showToast('Payment Successful (PayPal)', `Invoice for ${checkoutSub.name} captured via PayPal One-Click.`, 'success');
       }
 
+      // Update subscription list immediately with extended renewal date
+      setSubscriptions((prev) =>
+        prev.map((s) => {
+          if (s.id === checkoutSub.id) {
+            return {
+              ...s,
+              expirationDate: '2027-09-25',
+              autoRenewal: true,
+            };
+          }
+          return s;
+        })
+      );
+
       setCheckoutSub(null);
     } catch {
       showToast('Payment Error', 'Unable to complete checkout transaction.', 'error');
