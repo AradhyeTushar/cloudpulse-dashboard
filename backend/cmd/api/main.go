@@ -123,6 +123,16 @@ func main() {
 	})
 	r.Handle("/metrics", promhttp.Handler())
 
+	// Better Auth Protocol Endpoints (/api/auth/*)
+	r.Route("/api/auth", func(r chi.Router) {
+		r.Post("/sign-in/email", userHandler.BetterAuthSignIn)
+		r.Post("/sign-up/email", userHandler.BetterAuthSignUp)
+		r.Post("/sign-out", userHandler.BetterAuthSignOut)
+		r.Get("/get-session", userHandler.BetterAuthGetSession)
+		r.Get("/session", userHandler.BetterAuthGetSession)
+		r.Get("/me", userHandler.BetterAuthGetSession)
+	})
+
 	// API v1 Routes
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Get("/health", func(w http.ResponseWriter, r *http.Request) {

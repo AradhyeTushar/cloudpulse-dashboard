@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { UserProfile } from '../types';
+import { authClient, signIn, signUp, signOut } from '../lib/auth-client';
 import { MOCK_USER } from '../data/mock-user';
 
-interface AuthUser {
+export interface AuthUser {
   id: string;
   name: string;
   email: string;
@@ -19,7 +19,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, pass: string) => Promise<boolean>;
   register: (name: string, email: string, pass: string) => Promise<boolean>;
-  logout: () => void;
+  logout: () => Promise<void>;
   switchRole: (role: 'owner' | 'admin' | 'user') => void;
 }
 
@@ -55,16 +55,80 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const [isLoading, setIsLoading] = useState(false);
 
+  // Sync session on mount with Better Auth
+  useEffect(() => {
+    const syncBetterAuthSession = async () => {
+      try {
+        const res = await fetch('/api/auth/get-session', {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data?.user) {
+            const authUser: AuthUser = {
+              id: data.user.id,
+              name: data.user.name,
+              email: data.user.email,
+              role: data.user.role || 'owner',
+              workspaceName: `${data.user.name}'s Workspace`,
+              status: 'active',
+              assignedPlan: 'pro-500gb',
+            };
+            setUser(authUser);
+            localStorage.setItem(AUTH_USER_KEY, JSON.stringify(authUser));
+          }
+        }
+      } catch {
+        // network check fallback
+      }
+    };
+
+    if (token) {
+      syncBetterAuthSession();
+    }
+  }, [token]);
+
   const login = async (email: string, pass: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      // Try backend API first
-      const res = await fetch('http://localhost:8080/api/v1/auth/login', {
+      // 1. Better Auth Sign In
+      const res = await fetch('/api/auth/sign-in/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password: pass }),
       });
 
+      if (res.ok) {
+        const data = await res.json();
+        const jwtToken = data.token || data.session?.token;
+        const apiUser = data.user;
+        const authUser: AuthUser = {
+          id: apiUser.id,
+          name: apiUser.name,
+          email: apiUser.email,
+          role: apiUser.role || (email.includes('admin') ? 'owner' : 'user'),
+          workspaceName: `${apiUser.name}'s Workspace`,
+          status: 'active',
+          assignedPlan: 'pro-500gb',
+        };
+        setUser(authUser);
+        setToken(jwtToken);
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(authUser));
+        localStorage.setItem(AUTH_TOKEN_KEY, jwtToken);
+        setIsLoading(false);
+        return true;
+      }
+    } catch {
+      // Fallback
+    }
+
+    // 2. Fallback to /api/v1/auth/login
+    try {
+      const res = await fetch('/api/v1/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: pass }),
+      });
       if (res.ok) {
         const json = await res.json();
         const jwtToken = json.data?.token;
@@ -86,38 +150,54 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return true;
       }
     } catch {
-      // Offline fallback for smooth demo experience
+      // Offline fallback
     }
 
-    // Local authentication fallback
-    const role: 'owner' | 'admin' | 'user' = email.includes('admin') ? 'admin' : 'owner';
-    const fallbackUser: AuthUser = {
-      id: 'usr_' + Math.random().toString(36).substring(2, 9),
-      name: email.split('@')[0].replace('.', ' '),
-      email,
-      role,
-      workspaceName: `${email.split('@')[0]}'s Workspace`,
-      status: 'active',
-      assignedPlan: 'pro-500gb',
-    };
-    const fallbackToken = 'cp_sess_' + Math.random().toString(36).substring(2, 15);
-    setUser(fallbackUser);
-    setToken(fallbackToken);
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(fallbackUser));
-    localStorage.setItem(AUTH_TOKEN_KEY, fallbackToken);
     setIsLoading(false);
-    return true;
+    return false;
   };
 
   const register = async (name: string, email: string, pass: string): Promise<boolean> => {
     setIsLoading(true);
     try {
-      const res = await fetch('http://localhost:8080/api/v1/auth/register', {
+      // 1. Better Auth Sign Up
+      const res = await fetch('/api/auth/sign-up/email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name, email, password: pass }),
       });
 
+      if (res.ok) {
+        const data = await res.json();
+        const jwtToken = data.token || data.session?.token;
+        const apiUser = data.user;
+        const authUser: AuthUser = {
+          id: apiUser.id,
+          name: apiUser.name,
+          email: apiUser.email,
+          role: apiUser.role || 'owner',
+          workspaceName: `${name}'s Workspace`,
+          status: 'active',
+          assignedPlan: 'starter-100gb',
+        };
+        setUser(authUser);
+        setToken(jwtToken);
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(authUser));
+        localStorage.setItem(AUTH_TOKEN_KEY, jwtToken);
+        setIsLoading(false);
+        return true;
+      }
+    } catch {
+      // Fallback
+    }
+
+    // 2. Fallback to /api/v1/auth/register
+    try {
+      const res = await fetch('/api/v1/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, password: pass }),
+      });
       if (res.ok) {
         const json = await res.json();
         const jwtToken = json.data?.token;
@@ -142,25 +222,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Offline fallback
     }
 
-    const fallbackUser: AuthUser = {
-      id: 'usr_' + Math.random().toString(36).substring(2, 9),
-      name,
-      email,
-      role: 'owner',
-      workspaceName: `${name}'s Workspace`,
-      status: 'active',
-      assignedPlan: 'starter-100gb',
-    };
-    const fallbackToken = 'cp_sess_' + Math.random().toString(36).substring(2, 15);
-    setUser(fallbackUser);
-    setToken(fallbackToken);
-    localStorage.setItem(AUTH_USER_KEY, JSON.stringify(fallbackUser));
-    localStorage.setItem(AUTH_TOKEN_KEY, fallbackToken);
     setIsLoading(false);
-    return true;
+    return false;
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      await fetch('/api/auth/sign-out', { method: 'POST' });
+    } catch {
+      // ignore
+    }
     setUser(null);
     setToken(null);
     localStorage.removeItem(AUTH_USER_KEY);

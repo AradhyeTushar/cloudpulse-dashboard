@@ -25,6 +25,10 @@ func NewService(repo Repository, tokenService *auth.TokenService) *Service {
 	}
 }
 
+func (s *Service) GetTokenService() *auth.TokenService {
+	return s.tokenService
+}
+
 func (s *Service) Register(ctx context.Context, req *RegisterRequest) (*AuthResponse, error) {
 	if req.Name == "" || req.Email == "" || req.Password == "" {
 		return nil, errors.New("name, email, and password are required")
