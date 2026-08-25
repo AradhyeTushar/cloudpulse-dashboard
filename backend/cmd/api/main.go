@@ -270,18 +270,27 @@ func main() {
 
 				// Payment Gateways Catalog & Supported Currencies
 				r.Get("/gateways", func(w http.ResponseWriter, r *http.Request) {
+					paypalClientID := os.Getenv("PAYPAL_CLIENT_ID")
+					if paypalClientID == "" {
+						paypalClientID = "sb_paypal_client_id_cloudpulse"
+					}
+					razorpayKey := os.Getenv("RAZORPAY_KEY_ID")
+					if razorpayKey == "" {
+						razorpayKey = "rzp_test_cloudpulse_live"
+					}
+
 					response.Success(w, "Available payment gateways", map[string]any{
 						"razorpay": map[string]any{
 							"enabled":           true,
-							"key_id":            "rzp_test_cloudpulse_live",
+							"key_id":            razorpayKey,
 							"currencies":        []string{"INR", "USD", "EUR"},
 							"methods_supported": []string{"upi", "card", "netbanking", "wallet"},
 						},
 						"paypal": map[string]any{
 							"enabled":           true,
-							"client_id":         "sb_paypal_client_id_cloudpulse",
+							"client_id":         paypalClientID,
 							"currencies":        []string{"USD", "EUR", "GBP", "INR"},
-							"mode":              "sandbox",
+							"mode":              "live",
 						},
 					})
 				})
