@@ -83,11 +83,38 @@ func (s *ControlPlaneService) AuthorizeProxyRequest(ctx context.Context, req *Pr
 		return decision, err
 	}
 
+	// Find matching credential (with support for username tagging: cp_1638ac43-session-xyz or cp_1638ac43-country-in)
 	var matchedCred *credentials.ProxyCredential
+	var extractedSession string
+	var extractedCountry string
+
+	// Direct match first
 	for _, c := range allCreds {
 		if c.Username == req.Username {
 			matchedCred = c
 			break
+		}
+	}
+
+	// Tagged match (e.g. cp_1638ac43-session-abc or cp_1638ac43-country-us)
+	if matchedCred == nil {
+		for _, c := range allCreds {
+			if strings.HasPrefix(req.Username, c.Username+"-") || strings.HasPrefix(req.Username, c.Username+"_") {
+				matchedCred = c
+				remainder := req.Username[len(c.Username)+1:]
+				tokens := strings.Split(remainder, "-")
+				for i := 0; i < len(tokens); i++ {
+					t := strings.ToLower(tokens[i])
+					if (t == "session" || t == "sess") && i+1 < len(tokens) {
+						extractedSession = tokens[i+1]
+						i++
+					} else if (t == "country" || t == "zone") && i+1 < len(tokens) {
+						extractedCountry = strings.ToUpper(tokens[i+1])
+						i++
+					}
+				}
+				break
+			}
 		}
 	}
 
@@ -200,7 +227,27 @@ func (s *ControlPlaneService) AuthorizeProxyRequest(ctx context.Context, req *Pr
 	// 5. COUNTRY PERMISSIONS & TARGETING
 	// -------------------------------------------------------------------------
 	targetCountry := req.TargetCountry
-	if targetCountry == "" {
+	if extractedCountry != "" {
+		countryMap := map[string]string{
+			"US": "United States",
+			"USA": "United States",
+			"DE": "Germany",
+			"IN": "India",
+			"GB": "United Kingdom",
+			"UK": "United Kingdom",
+			"FR": "France",
+			"JP": "Japan",
+			"SG": "Singapore",
+			"CA": "Canada",
+			"AU": "Australia",
+			"BR": "Brazil",
+		}
+		if mapped, ok := countryMap[extractedCountry]; ok {
+			targetCountry = mapped
+		} else {
+			targetCountry = extractedCountry
+		}
+	} else if targetCountry == "" {
 		targetCountry = matchedCred.TargetCountry
 	}
 	if targetCountry == "" {
@@ -235,7 +282,9 @@ func (s *ControlPlaneService) AuthorizeProxyRequest(ctx context.Context, req *Pr
 	// -------------------------------------------------------------------------
 	sessionID := req.TargetHost
 	rotMode := providers.RotationSticky
-	if matchedCred.RotationMode == "rotating" {
+	if extractedSession != "" {
+		sessionID = fmt.Sprintf("sess_%s_%s", user.ID[:6], extractedSession)
+	} else if matchedCred.RotationMode == "rotating" {
 		rotMode = providers.RotationRotating
 		sessionID = fmt.Sprintf("rot_%s", generateRandomHex(6))
 	} else if !strings.HasPrefix(sessionID, "sess_") {
