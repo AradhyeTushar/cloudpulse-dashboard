@@ -53,6 +53,8 @@ func main() {
 
 	userRepo := users.NewRepository(db.Pool)
 	userService := users.NewService(userRepo, tokenService)
+	userService.SetRedisClient(db.Redis)
+	userService.SetSMTPConfig(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom)
 	userHandler := users.NewHandler(userService)
 
 	plansService := plans.NewService()
@@ -162,6 +164,8 @@ func main() {
 	r.Route("/api/auth", func(r chi.Router) {
 		r.Post("/sign-in/email", userHandler.BetterAuthSignIn)
 		r.Post("/sign-up/email", userHandler.BetterAuthSignUp)
+		r.Post("/register/send-otp", userHandler.SendRegistrationOTP)
+		r.Post("/register/verify-otp", userHandler.VerifyRegistrationOTP)
 		r.Post("/sign-in/social", userHandler.BetterAuthSignInSocial)
 		r.Get("/oauth/google", userHandler.GoogleOAuthRedirect)
 		r.Get("/callback/google", userHandler.GoogleOAuthCallback)
@@ -215,6 +219,8 @@ func main() {
 		// Public Auth
 		r.Route("/auth", func(r chi.Router) {
 			r.Post("/register", userHandler.Register)
+			r.Post("/register/send-otp", userHandler.SendRegistrationOTP)
+			r.Post("/register/verify-otp", userHandler.VerifyRegistrationOTP)
 			r.Post("/login", userHandler.Login)
 		})
 

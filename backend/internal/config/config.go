@@ -23,6 +23,13 @@ type Config struct {
 		KeyLength   uint32
 	}
 
+	// SMTP Mail Configuration
+	SMTPHost string
+	SMTPPort string
+	SMTPUser string
+	SMTPPass string
+	SMTPFrom string
+
 	CORSOrigins []string
 }
 
@@ -34,6 +41,11 @@ func Load() *Config {
 		RedisURL:    getEnv("REDIS_URL", "redis://localhost:6379/0"),
 		JWTSecret:   getEnv("JWT_SECRET", "cloudpulse_super_secret_jwt_key_development_only_min_32_bytes"),
 		JWTExpiry:   time.Hour * 24, // 24 hours
+		SMTPHost:    getEnv("SMTP_HOST", ""),
+		SMTPPort:    getEnv("SMTP_PORT", "587"),
+		SMTPUser:    getEnv("SMTP_USER", ""),
+		SMTPPass:    getEnv("SMTP_PASS", ""),
+		SMTPFrom:    getEnv("SMTP_FROM", "no-reply@cloudpulse.net"),
 		CORSOrigins: []string{"http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"},
 	}
 

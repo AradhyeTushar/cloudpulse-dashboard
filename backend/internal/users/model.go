@@ -37,8 +37,29 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
+type SendOTPRequest struct {
+	Name            string `json:"name"`
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirm_password,omitempty"`
+}
+
+type VerifyOTPRequest struct {
+	Email string `json:"email"`
+	OTP   string `json:"otp"`
+}
+
+type RegistrationPending struct {
+	Name         string `json:"name"`
+	Email        string `json:"email"`
+	PasswordHash string `json:"password_hash"`
+	OTP          string `json:"otp"`
+	CreatedAt    int64  `json:"created_at"`
+}
+
 type AuthResponse struct {
 	Token     string    `json:"token"`
 	ExpiresAt time.Time `json:"expires_at"`
 	User      *User     `json:"user"`
 }
+

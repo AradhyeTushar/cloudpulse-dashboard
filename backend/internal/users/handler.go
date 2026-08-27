@@ -41,6 +41,62 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	response.Created(w, "User registered successfully", res)
 }
 
+// SendRegistrationOTP handles POST /api/v1/auth/register/send-otp and /api/auth/register/send-otp
+func (h *Handler) SendRegistrationOTP(w http.ResponseWriter, r *http.Request) {
+	var req SendOTPRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "Invalid JSON payload")
+		return
+	}
+
+	otp, err := h.service.SendRegistrationOTP(r.Context(), &req)
+	if err != nil {
+		if errorsIs(err, ErrUserAlreadyExists) {
+			response.Error(w, http.StatusConflict, "USER_EXISTS", "An account with this email already exists")
+			return
+		}
+		response.BadRequest(w, err.Error())
+		return
+	}
+
+	response.Success(w, "Verification code sent to your email address", map[string]any{
+		"sent":    true,
+		"email":   req.Email,
+		"dev_otp": otp,
+	})
+}
+
+// VerifyRegistrationOTP handles POST /api/v1/auth/register/verify-otp and /api/auth/register/verify-otp
+func (h *Handler) VerifyRegistrationOTP(w http.ResponseWriter, r *http.Request) {
+	var req VerifyOTPRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "Invalid JSON payload")
+		return
+	}
+
+	res, err := h.service.VerifyRegistrationOTP(r.Context(), req.Email, req.OTP)
+	if err != nil {
+		if errorsIs(err, ErrUserAlreadyExists) {
+			response.Error(w, http.StatusConflict, "USER_EXISTS", "An account with this email already exists")
+			return
+		}
+		response.BadRequest(w, err.Error())
+		return
+	}
+
+	http.SetCookie(w, &http.Cookie{
+		Name:     "better-auth.session_token",
+		Value:    res.Token,
+		Path:     "/",
+		Expires:  res.ExpiresAt,
+		HttpOnly: false,
+		SameSite: http.SameSiteLaxMode,
+		Secure:   false,
+	})
+
+	response.Created(w, "Account verified and created successfully", res)
+}
+
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {

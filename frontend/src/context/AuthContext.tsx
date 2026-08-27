@@ -19,6 +19,8 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, pass: string) => Promise<boolean>;
   register: (name: string, email: string, pass: string) => Promise<boolean>;
+  sendRegistrationOTP: (name: string, email: string, pass: string, confirmPass?: string) => Promise<{ success: boolean; message?: string }>;
+  verifyRegistrationOTP: (email: string, otp: string) => Promise<{ success: boolean; message?: string }>;
   loginWithGoogle: () => Promise<boolean>;
   logout: () => Promise<void>;
   switchRole: (role: 'owner' | 'admin' | 'user') => void;
@@ -251,6 +253,104 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return false;
   };
 
+  const sendRegistrationOTP = async (
+    name: string,
+    email: string,
+    pass: string,
+    confirmPass?: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    setIsLoading(true);
+    try {
+      let res = await fetch('/api/v1/auth/register/send-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          email,
+          password: pass,
+          confirm_password: confirmPass || pass,
+        }),
+      });
+
+      if (!res.ok && res.status === 404) {
+        res = await fetch('/api/auth/register/send-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name,
+            email,
+            password: pass,
+            confirm_password: confirmPass || pass,
+          }),
+        });
+      }
+
+      const data = await res.json().catch(() => ({}));
+      setIsLoading(false);
+
+      if (res.ok) {
+        return { success: true, message: data.message || 'Verification code sent to your email.' };
+      }
+
+      const errMsg = data.error?.message || data.message || 'Failed to send verification code.';
+      return { success: false, message: errMsg };
+    } catch (err: any) {
+      setIsLoading(false);
+      return { success: false, message: err?.message || 'Network error while requesting verification code.' };
+    }
+  };
+
+  const verifyRegistrationOTP = async (
+    email: string,
+    otp: string
+  ): Promise<{ success: boolean; message?: string }> => {
+    setIsLoading(true);
+    try {
+      let res = await fetch('/api/v1/auth/register/verify-otp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, otp }),
+      });
+
+      if (!res.ok && res.status === 404) {
+        res = await fetch('/api/auth/register/verify-otp', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, otp }),
+        });
+      }
+
+      const json = await res.json().catch(() => ({}));
+      if (res.ok) {
+        const payload = json.data || json;
+        const jwtToken = payload.token || payload.session?.token;
+        const apiUser = payload.user;
+        const authUser: AuthUser = {
+          id: apiUser.id,
+          name: apiUser.name,
+          email: apiUser.email,
+          role: 'user',
+          workspaceName: apiUser.workspace_name || `${apiUser.name}'s Workspace`,
+          status: 'active',
+          assignedPlan: 'starter-100gb',
+        };
+        setUser(authUser);
+        setToken(jwtToken);
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(authUser));
+        localStorage.setItem(AUTH_TOKEN_KEY, jwtToken);
+        setIsLoading(false);
+        return { success: true };
+      }
+
+      const errMsg = json.error?.message || json.message || 'Invalid or expired verification code.';
+      setIsLoading(false);
+      return { success: false, message: errMsg };
+    } catch (err: any) {
+      setIsLoading(false);
+      return { success: false, message: err?.message || 'Verification failed due to a network error.' };
+    }
+  };
+
   const loginWithGoogle = async (): Promise<boolean> => {
     setIsLoading(true);
     const redirectURI = `${window.location.origin}/api/auth/callback/google`;
@@ -287,6 +387,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         login,
         register,
+        sendRegistrationOTP,
+        verifyRegistrationOTP,
         loginWithGoogle,
         logout,
         switchRole,
