@@ -72,7 +72,7 @@ func (r *postgresRepo) CreateProxyCredential(ctx context.Context, c *ProxyCreden
 }
 
 func (r *postgresRepo) GetProxyCredentialByID(ctx context.Context, id string) (*ProxyCredential, error) {
-	query := `SELECT id, user_id, name, proxy_type, protocol, rotation_mode, session_duration_min, target_country, target_country_code, target_state, target_city, username, plain_password, ip_whitelist, status, created_at, updated_at FROM proxy_credentials WHERE id = $1`
+	query := `SELECT id, user_id, name, proxy_type, protocol, rotation_mode, session_duration_min, target_country, target_country_code, COALESCE(target_state, ''), COALESCE(target_city, ''), username, COALESCE(plain_password, ''), ip_whitelist, status, created_at, updated_at FROM proxy_credentials WHERE id = $1`
 	var c ProxyCredential
 	err := r.pool.QueryRow(ctx, query, id).Scan(
 		&c.ID, &c.UserID, &c.Name, &c.ProxyType, &c.Protocol, &c.RotationMode, &c.SessionDurationMin,
@@ -82,7 +82,7 @@ func (r *postgresRepo) GetProxyCredentialByID(ctx context.Context, id string) (*
 	if err != nil {
 		return nil, ErrNotFound
 	}
-	c.Host = "pr.cloudpulse.net"
+	c.Host = "200.234.41.58"
 	c.Port = 8000
 	if c.Protocol == "socks5" {
 		c.Port = 1080
@@ -91,7 +91,7 @@ func (r *postgresRepo) GetProxyCredentialByID(ctx context.Context, id string) (*
 }
 
 func (r *postgresRepo) ListProxyCredentials(ctx context.Context, userID string) ([]*ProxyCredential, error) {
-	query := `SELECT id, user_id, name, proxy_type, protocol, rotation_mode, session_duration_min, target_country, target_country_code, target_state, target_city, username, plain_password, ip_whitelist, status, created_at, updated_at FROM proxy_credentials WHERE user_id = $1 OR $1 = '' ORDER BY created_at DESC`
+	query := `SELECT id, user_id, name, proxy_type, protocol, rotation_mode, session_duration_min, target_country, target_country_code, COALESCE(target_state, ''), COALESCE(target_city, ''), username, COALESCE(plain_password, ''), ip_whitelist, status, created_at, updated_at FROM proxy_credentials WHERE user_id = $1 OR $1 = '' ORDER BY created_at DESC`
 	rows, err := r.pool.Query(ctx, query, userID)
 	if err != nil {
 		return nil, err
@@ -108,7 +108,7 @@ func (r *postgresRepo) ListProxyCredentials(ctx context.Context, userID string) 
 		); err != nil {
 			return nil, err
 		}
-		c.Host = "pr.cloudpulse.net"
+		c.Host = "200.234.41.58"
 		c.Port = 8000
 		if c.Protocol == "socks5" {
 			c.Port = 1080

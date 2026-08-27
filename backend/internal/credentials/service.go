@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/AradhyeTushar/cloudpulse-dashboard/backend/internal/auth"
@@ -74,20 +75,26 @@ func (s *Service) CreateProxyCredential(ctx context.Context, userID string, req 
 	}
 	targetCountryCode := req.TargetCountryCode
 	if targetCountryCode == "" {
-		targetCountryCode = "US"
+		targetCountryCode = "IN"
 	}
 
-	rawPassword := GenerateRandomPassword()
+	rawPassword := req.Password
+	if rawPassword == "" {
+		rawPassword = GenerateRandomPassword()
+	}
 	passHash, _ := auth.HashPassword(rawPassword, nil)
 
-	randomUserSuffix := uuid.New().String()[:8]
-	generatedUsername := fmt.Sprintf("cp_%s", randomUserSuffix)
-
-	host := "pr.cloudpulse.net"
-	port := 8000
-	if proxyType == "datacenter" {
-		host = "dc.cloudpulse.net"
+	generatedUsername := req.Username
+	if generatedUsername == "" {
+		randomUserSuffix := uuid.New().String()[:8]
+		generatedUsername = fmt.Sprintf("cp_%s", randomUserSuffix)
 	}
+
+	host := req.Host
+	if host == "" || strings.Contains(host, "cloudpulse.net") {
+		host = "200.234.41.58"
+	}
+	port := 8000
 	if protocol == "socks5" {
 		port = 1080
 	}

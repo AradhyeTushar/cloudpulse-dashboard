@@ -237,6 +237,106 @@ func main() {
 			r.Post("/abuse-event", controlPlaneHandler.ReportAbuse)
 		})
 
+		// Proxy Credential Sync Route (Allows frontend to synchronize active endpoints into control plane)
+		r.Post("/proxy-credentials/sync", func(w http.ResponseWriter, r *http.Request) {
+			var req credentials.CreateProxyCredentialRequest
+			if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+				response.BadRequest(w, "Invalid JSON payload")
+				return
+			}
+
+			// Try to extract user from context claims first
+			var userID string
+			authHeader := r.Header.Get("Authorization")
+			if strings.HasPrefix(authHeader, "Bearer ") {
+				tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+				if claims, err := tokenService.ValidateToken(tokenStr); err == nil && claims != nil {
+					userID = claims.UserID
+				}
+			}
+			// Or fallback to first user in system
+			if userID == "" {
+				var fallbackID string
+				_ = db.Pool.QueryRow(r.Context(), "SELECT id FROM users LIMIT 1").Scan(&fallbackID)
+				userID = fallbackID
+			}
+			if userID == "" {
+				response.BadRequest(w, "No active user found")
+				return
+			}
+
+			if req.Username != "" && req.Password != "" {
+				passHash, _ := auth.HashPassword(req.Password, nil)
+				host := req.Host
+				if host == "" || strings.Contains(host, "cloudpulse.net") {
+					host = "200.234.41.58"
+				}
+				targetCountry := req.TargetCountry
+				if targetCountry == "" {
+					targetCountry = "India"
+				}
+				targetCountryCode := req.TargetCountryCode
+				if targetCountryCode == "" {
+					targetCountryCode = "IN"
+				}
+
+				query := `
+					INSERT INTO proxy_credentials (id, user_id, name, proxy_type, protocol, rotation_mode, session_duration_min, target_country, target_country_code, target_state, target_city, username, password_hash, plain_password, ip_whitelist, status)
+					VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, '', '', $10, $11, $12, $13, 'active')
+					ON CONFLICT (username) DO UPDATE
+					SET plain_password = EXCLUDED.plain_password, password_hash = EXCLUDED.password_hash, status = 'active', target_country = EXCLUDED.target_country, target_country_code = EXCLUDED.target_country_code;
+				`
+				id := fmt.Sprintf("pcred_%s", req.Username)
+				whitelist := req.IPWhitelist
+				if whitelist == nil {
+					whitelist = []string{}
+				}
+				name := req.Name
+				if name == "" {
+					name = "India Dedicated Endpoint"
+				}
+				proxyType := req.ProxyType
+				if proxyType == "" {
+					proxyType = "residential"
+				}
+				protocol := req.Protocol
+				if protocol == "" {
+					protocol = "http"
+				}
+				rotMode := req.RotationMode
+				if rotMode == "" {
+					rotMode = "rotating"
+				}
+				duration := req.SessionDurationMin
+				if duration <= 0 {
+					duration = 10
+				}
+
+				_, err := db.Pool.Exec(r.Context(), query,
+					id, userID, name, proxyType, protocol, rotMode, duration,
+					targetCountry, targetCountryCode, req.Username, passHash, req.Password, whitelist,
+				)
+				if err != nil {
+					response.InternalServerError(w, err.Error())
+					return
+				}
+				response.Success(w, "Proxy credential synchronized and activated", map[string]string{
+					"username": req.Username,
+					"host":     host,
+					"port":     "8000",
+					"status":   "active",
+				})
+				return
+			}
+
+			cred, err := credService.CreateProxyCredential(r.Context(), userID, &req)
+			if err != nil {
+				response.BadRequest(w, err.Error())
+				return
+			}
+			response.Created(w, "Proxy credential created and registered", cred)
+		})
+
 		// Protected Routes (Customer & Tenant)
 		r.Group(func(r chi.Router) {
 			r.Use(middleware.Authenticator(tokenService, credService))

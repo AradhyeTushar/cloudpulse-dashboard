@@ -292,6 +292,35 @@ export type CreateEndpointDTO = Partial<Omit<ProxyEndpointConfig, 'id' | 'create
   countryCode: string;
 };
 
+export const syncCredentialToBackend = async (ep: ProxyEndpointConfig) => {
+  try {
+    const token = typeof localStorage !== 'undefined' ? localStorage.getItem('cloudpulse_auth_token') : null;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    await fetch('/api/v1/proxy-credentials/sync', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        name: ep.name,
+        proxy_type: ep.proxyType,
+        protocol: ep.protocol,
+        rotation_mode: ep.rotationMode,
+        session_duration_min: ep.sessionDurationMin || 10,
+        target_country: ep.country || 'India',
+        target_country_code: ep.countryCode || 'IN',
+        username: ep.username,
+        password: ep.password,
+        host: ep.host,
+        ip_whitelist: ep.ipWhitelist || [],
+      }),
+    });
+  } catch {
+    // Non-blocking sync
+  }
+};
+
 export const proxyService = {
   // ---------------------------------------------------------------------------
   // Central Plan & Subscription Management
@@ -437,13 +466,27 @@ export const proxyService = {
 
     // Run dynamic status evaluation on all endpoints
     const now = new Date();
+    const defaultServerHost =
+      typeof window !== 'undefined' &&
+      window.location.hostname &&
+      window.location.hostname !== 'localhost' &&
+      window.location.hostname !== '127.0.0.1'
+        ? window.location.hostname
+        : '200.234.41.58';
+
     const evaluated = rawList.map((ep) => {
       const { status, reason } = evaluateEndpointStatus(ep, sub, plan, now);
-      return {
+      const fixedHost = ep.host && !ep.host.includes('cloudpulse.net') ? ep.host : defaultServerHost;
+      const updatedEp = {
         ...ep,
+        host: fixedHost,
         status: ep.status === 'Disabled' && ep.disabledReason === 'Manually disabled by user' ? 'Disabled' : status,
         disabledReason: reason || ep.disabledReason,
       };
+      if (updatedEp.status === 'Active') {
+        syncCredentialToBackend(updatedEp);
+      }
+      return updatedEp;
     });
 
     return evaluated;
@@ -505,7 +548,7 @@ export const proxyService = {
     const expiresAt = new Date(now.getTime() + validityHours * 3600 * 1000);
     const limitBytes = isFree ? 50 * 1024 * 1024 : plan.trafficLimitBytes;
 
-    const host = dto.host || (dto.proxyType === 'datacenter' ? 'dc.cloudpulse.net' : 'pr.cloudpulse.net');
+    const host = dto.host || (typeof window !== 'undefined' && window.location.hostname && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' ? window.location.hostname : '200.234.41.58');
     const port = dto.port || (dto.protocol === 'socks5' ? 1080 : 8000);
     const username = dto.username || 'cp_' + Math.random().toString(36).substring(2, 8);
     const password = dto.password || 'p_sec_' + Math.random().toString(36).substring(2, 10);
@@ -521,8 +564,8 @@ export const proxyService = {
       password,
       rotationMode: dto.rotationMode,
       sessionDurationMin: dto.sessionDurationMin || 10,
-      country: dto.country,
-      countryCode: dto.countryCode,
+      country: dto.country || 'India',
+      countryCode: dto.countryCode || 'IN',
       state: dto.state,
       city: dto.city,
       ipWhitelist: dto.ipWhitelist || [],
@@ -541,6 +584,10 @@ export const proxyService = {
 
     const updated = [newEp, ...existingList];
     localStorage.setItem(key, JSON.stringify(updated));
+
+    // Register with Control Plane backend immediately
+    syncCredentialToBackend(newEp);
+
     return newEp;
   },
 

@@ -20,7 +20,7 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
   const [showPassword, setShowPassword] = useState(false);
   const [copiedUri, setCopiedUri] = useState(false);
   const [copiedCurl, setCopiedCurl] = useState(false);
-  const [useLocalHost, setUseLocalHost] = useState(true);
+  const [useLocalHost, setUseLocalHost] = useState(false);
   const [showIpEdit, setShowIpEdit] = useState(false);
   const [ipInput, setIpInput] = useState((endpoint.ipWhitelist || []).join(', '));
 
@@ -35,7 +35,19 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
     showToast('IP Blocks Updated', `Updated IP whitelist for ${endpoint.name}.`, 'success');
   };
 
-  const activeHost = useLocalHost ? '127.0.0.1' : endpoint.host;
+  const serverHost =
+    typeof window !== 'undefined' &&
+    window.location.hostname &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1'
+      ? window.location.hostname
+      : '200.234.41.58';
+
+  const activeHost = useLocalHost
+    ? '127.0.0.1'
+    : endpoint.host && !endpoint.host.includes('cloudpulse.net')
+    ? endpoint.host
+    : serverHost;
   const proxyUri = `http://${endpoint.username}:${endpoint.password}@${activeHost}:${endpoint.port}`;
   const curlCommand = `curl -x "http://${endpoint.username}:${endpoint.password}@${activeHost}:${endpoint.port}" https://api.ipify.org`;
 
@@ -192,6 +204,22 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
           <div style={{ display: 'flex', gap: '4px', background: 'var(--bg-subtle)', padding: '2px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)' }}>
             <button
               type="button"
+              onClick={() => setUseLocalHost(false)}
+              style={{
+                border: 'none',
+                background: !useLocalHost ? 'var(--brand-primary)' : 'transparent',
+                color: !useLocalHost ? '#fff' : 'var(--text-secondary)',
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                padding: '0.15rem 0.45rem',
+                borderRadius: '4px',
+                cursor: 'pointer',
+              }}
+            >
+              Gateway ({serverHost})
+            </button>
+            <button
+              type="button"
               onClick={() => setUseLocalHost(true)}
               style={{
                 border: 'none',
@@ -205,22 +233,6 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
               }}
             >
               127.0.0.1 (Local)
-            </button>
-            <button
-              type="button"
-              onClick={() => setUseLocalHost(false)}
-              style={{
-                border: 'none',
-                background: !useLocalHost ? 'var(--brand-primary)' : 'transparent',
-                color: !useLocalHost ? '#fff' : 'var(--text-secondary)',
-                fontSize: '0.7rem',
-                fontWeight: 700,
-                padding: '0.15rem 0.45rem',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
-            >
-              {endpoint.host}
             </button>
           </div>
         </div>

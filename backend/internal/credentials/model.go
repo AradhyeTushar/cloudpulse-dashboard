@@ -35,6 +35,9 @@ type CreateProxyCredentialRequest struct {
 	TargetCountryCode  string   `json:"target_country_code,omitempty"`
 	TargetState        string   `json:"target_state,omitempty"`
 	TargetCity         string   `json:"target_city,omitempty"`
+	Username           string   `json:"username,omitempty"`
+	Password           string   `json:"password,omitempty"`
+	Host               string   `json:"host,omitempty"`
 	IPWhitelist        []string `json:"ip_whitelist,omitempty"`
 }
 
