@@ -53,6 +53,38 @@ function getUserKey(prefix: string): string {
   return `cloudpulse_${prefix}_${safeKey}`;
 }
 
+// Automatically sanitize any legacy synthesized mock endpoints (e.g. 8.4 MB Primary Gateway)
+function sanitizeLegacyLocalStorage(): void {
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const storageKey = localStorage.key(i);
+      if (storageKey && storageKey.startsWith('cloudpulse_proxy_endpoints')) {
+        if (storageKey.includes('alex_mercer') || storageKey.includes('admin_operator')) {
+          continue;
+        }
+        const val = localStorage.getItem(storageKey);
+        if (val && (val.includes('Primary Gateway') || val.includes('8.4') || val.includes('8808038'))) {
+          try {
+            const list = JSON.parse(val);
+            if (Array.isArray(list)) {
+              const cleaned = list.filter(
+                (ep: any) =>
+                  !ep.name?.includes('Primary Gateway') &&
+                  Math.abs((ep.usedBytes || 0) - 8.4 * 1024 * 1024) > 10000
+              );
+              localStorage.setItem(storageKey, JSON.stringify(cleaned));
+            }
+          } catch {}
+        }
+      }
+    }
+  } catch {}
+}
+
+if (typeof window !== 'undefined') {
+  sanitizeLegacyLocalStorage();
+}
+
 const ADMIN_USERS_KEY = 'cloudpulse_admin_users';
 
 function getInitialUserSubscription(email: string): UserProxySubscription {
@@ -371,7 +403,7 @@ export const proxyService = {
     const plan = getPlanConfig(sub.planId);
     const { email } = getCurrentUserIdentity();
 
-    let rawList: ProxyEndpointConfig[];
+    let rawList: ProxyEndpointConfig[] = [];
     const saved = localStorage.getItem(key);
     if (!saved) {
       rawList = getInitialUserEndpoints(email, plan);
@@ -379,8 +411,27 @@ export const proxyService = {
     } else {
       try {
         rawList = JSON.parse(saved);
+        if (!Array.isArray(rawList)) rawList = [];
       } catch {
         rawList = getInitialUserEndpoints(email, plan);
+      }
+    }
+
+    // Explicitly purge legacy synthesized mock endpoints (e.g. 8.4 MB Primary Gateway)
+    // for all standard users who haven't created real endpoints
+    const isDemo = email.includes('alex.mercer') || email.includes('admin.operator');
+    if (!isDemo && rawList.length > 0) {
+      const sanitized = rawList.filter((ep) => {
+        const isLegacyMock =
+          ep.name.includes('Primary Gateway') ||
+          Math.abs((ep.usedBytes || 0) - 8.4 * 1024 * 1024) < 10000 ||
+          (ep.isFree && (ep.usedBytes || 0) > 0 && ep.name.toLowerCase().includes('gateway'));
+        return !isLegacyMock;
+      });
+
+      if (sanitized.length !== rawList.length) {
+        rawList = sanitized;
+        localStorage.setItem(key, JSON.stringify(rawList));
       }
     }
 
@@ -401,7 +452,21 @@ export const proxyService = {
   getFreeProxiesLifetimeCreated: (): number => {
     const key = getUserKey('free_proxies_lifetime_created');
     const saved = localStorage.getItem(key);
-    return saved ? parseInt(saved, 10) || 0 : 0;
+    let count = saved ? parseInt(saved, 10) || 0 : 0;
+
+    // Reset count if it was incremented by legacy mock and user has 0 endpoints
+    const { email } = getCurrentUserIdentity();
+    const isDemo = email.includes('alex.mercer') || email.includes('admin.operator');
+    if (!isDemo) {
+      const endpointsKey = getUserKey('proxy_endpoints');
+      const endpointsSaved = localStorage.getItem(endpointsKey);
+      if (!endpointsSaved || endpointsSaved === '[]') {
+        count = 0;
+        localStorage.setItem(key, '0');
+      }
+    }
+
+    return count;
   },
 
   incrementFreeProxiesLifetimeCount: () => {
