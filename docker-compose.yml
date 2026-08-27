@@ -61,6 +61,8 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-no-reply@cloudpulse.net}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      EMAIL_FROM: ${EMAIL_FROM:-CloudPulse <onboarding@resend.dev>}
     depends_on:
       postgres:
         condition: service_healthy

@@ -1,13 +1,16 @@
 package users
 
 import (
+	"bytes"
 	"context"
 	crand "crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
+	"net/http"
 	"net/smtp"
 	"strings"
 	"sync"
@@ -32,6 +35,8 @@ type Service struct {
 	smtpUser     string
 	smtpPass     string
 	smtpFrom     string
+	resendApiKey string
+	emailFrom    string
 	pendingOTP   sync.Map
 }
 
@@ -52,6 +57,15 @@ func (s *Service) SetSMTPConfig(host, port, user, pass, from string) {
 	s.smtpUser = user
 	s.smtpPass = pass
 	s.smtpFrom = from
+}
+
+func (s *Service) SetResendConfig(apiKey, from string) {
+	s.resendApiKey = strings.TrimSpace(apiKey)
+	if from != "" {
+		s.emailFrom = strings.TrimSpace(from)
+	} else {
+		s.emailFrom = "CloudPulse <onboarding@resend.dev>"
+	}
 }
 
 func (s *Service) GetTokenService() *auth.TokenService {
@@ -117,20 +131,24 @@ func (s *Service) SendRegistrationOTP(ctx context.Context, req *SendOTPRequest) 
 }
 
 func (s *Service) dispatchOTPEmail(to, name, otp string) {
-	if s.smtpHost == "" || s.smtpUser == "" {
-		log.Printf("[EMAIL OTP] (SMTP not configured) Code for %s (%s) is: %s", name, to, otp)
-		return
+	// 1. Try Resend HTTP API first if key provided
+	if s.resendApiKey != "" {
+		if err := s.dispatchViaResend(to, name, otp); err == nil {
+			return
+		}
 	}
 
-	auth := smtp.PlainAuth("", s.smtpUser, s.smtpPass, s.smtpHost)
-	subject := "Your CloudPulse Verification Code: " + otp
-	from := s.smtpFrom
-	if from == "" {
-		from = s.smtpUser
-	}
+	// 2. Try standard SMTP if configured
+	if s.smtpHost != "" && s.smtpUser != "" {
+		auth := smtp.PlainAuth("", s.smtpUser, s.smtpPass, s.smtpHost)
+		subject := "Your CloudPulse Verification Code: " + otp
+		from := s.smtpFrom
+		if from == "" {
+			from = s.smtpUser
+		}
 
-	body := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n"+
-		`<!DOCTYPE html>
+		body := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: %s\r\nMIME-Version: 1.0\r\nContent-Type: text/html; charset=UTF-8\r\n\r\n"+
+			`<!DOCTYPE html>
 <html>
 <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0b0f19; color: #f8fafc; padding: 40px 20px;">
   <div style="max-width: 500px; margin: 0 auto; background: #131b2e; border: 1px solid #1e293b; border-radius: 12px; padding: 32px;">
@@ -145,12 +163,74 @@ func (s *Service) dispatchOTPEmail(to, name, otp string) {
 </body>
 </html>`, from, to, subject, name, otp)
 
-	addr := fmt.Sprintf("%s:%s", s.smtpHost, s.smtpPort)
-	if err := smtp.SendMail(addr, auth, from, []string{to}, []byte(body)); err != nil {
-		log.Printf("[EMAIL OTP ERROR] Failed to send email via SMTP (%s): %v", addr, err)
-		return
+		addr := fmt.Sprintf("%s:%s", s.smtpHost, s.smtpPort)
+		if err := smtp.SendMail(addr, auth, from, []string{to}, []byte(body)); err != nil {
+			log.Printf("[EMAIL OTP ERROR] Failed to send email via SMTP (%s): %v", addr, err)
+		} else {
+			log.Printf("[EMAIL OTP SUCCESS] Delivered verification email to %s via SMTP", to)
+			return
+		}
 	}
-	log.Printf("[EMAIL OTP SUCCESS] Delivered verification email to %s", to)
+
+	log.Printf("[EMAIL OTP] Fallback Code for %s (%s) is: %s", name, to, otp)
+}
+
+func (s *Service) dispatchViaResend(to, name, otp string) error {
+	from := s.emailFrom
+	if from == "" {
+		from = "CloudPulse <onboarding@resend.dev>"
+	}
+
+	htmlBody := fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background-color: #0b0f19; color: #f8fafc; padding: 40px 20px;">
+  <div style="max-width: 500px; margin: 0 auto; background: #131b2e; border: 1px solid #1e293b; border-radius: 12px; padding: 32px;">
+    <h2 style="color: #6366f1; margin-top: 0; font-size: 24px;">CloudPulse Verification</h2>
+    <p style="color: #94a3b8; font-size: 15px;">Hello %s,</p>
+    <p style="color: #cbd5e1; font-size: 15px; line-height: 1.5;">Thank you for registering with CloudPulse. Enter the 6-digit verification code below to verify your email and activate your account:</p>
+    <div style="text-align: center; margin: 28px 0;">
+      <span style="display: inline-block; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #38bdf8; background: rgba(56, 189, 248, 0.1); padding: 14px 28px; border-radius: 10px; border: 1px solid rgba(56, 189, 248, 0.3);">%s</span>
+    </div>
+    <p style="color: #64748b; font-size: 13px;">This security code will expire in 10 minutes. If you did not request this, please ignore this email.</p>
+  </div>
+</body>
+</html>`, name, otp)
+
+	payload := map[string]any{
+		"from":    from,
+		"to":      []string{to},
+		"subject": "Your CloudPulse Verification Code: " + otp,
+		"html":    htmlBody,
+	}
+
+	bodyBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	httpReq, err := http.NewRequest("POST", "https://api.resend.com/emails", bytes.NewBuffer(bodyBytes))
+	if err != nil {
+		return err
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+s.resendApiKey)
+	httpReq.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		log.Printf("[RESEND ERROR] Failed to send via Resend API: %v", err)
+		return err
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		log.Printf("[RESEND SUCCESS] Verification email sent to %s via Resend! ID response: %s", to, string(respBody))
+		return nil
+	}
+
+	log.Printf("[RESEND NOTICE] Resend returned status %d: %s", resp.StatusCode, string(respBody))
+	return fmt.Errorf("resend status %d: %s", resp.StatusCode, string(respBody))
 }
 
 func (s *Service) VerifyRegistrationOTP(ctx context.Context, email, otp string) (*AuthResponse, error) {

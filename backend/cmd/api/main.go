@@ -55,6 +55,7 @@ func main() {
 	userService := users.NewService(userRepo, tokenService)
 	userService.SetRedisClient(db.Redis)
 	userService.SetSMTPConfig(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom)
+	userService.SetResendConfig(cfg.ResendAPIKey, cfg.EmailFrom)
 	userHandler := users.NewHandler(userService)
 
 	plansService := plans.NewService()
