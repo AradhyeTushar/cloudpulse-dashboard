@@ -10,6 +10,7 @@ import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { useToast } from '../../context/ToastContext';
 import { ProxyPlanConfig } from '../../config/proxyPlans';
+import { detectDeviceIP } from '../../utils/deviceIp';
 
 export const ProxyCredentialsPage: React.FC = () => {
   const { showToast } = useToast();
@@ -42,6 +43,11 @@ export const ProxyCredentialsPage: React.FC = () => {
   const [bulkIpText, setBulkIpText] = useState('110.227.184.49');
 
   useEffect(() => {
+    detectDeviceIP().then((ip) => {
+      setTestClientIP(ip);
+      setBulkIpText(ip);
+    });
+
     const handlePlanUpdate = () => {
       refreshState();
     };
@@ -177,7 +183,7 @@ export const ProxyCredentialsPage: React.FC = () => {
                 </span>
               </div>
               <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-                Detected Public IP: <strong style={{ color: 'var(--brand-primary)' }}>110.227.184.49</strong>
+                Detected Device IP: <strong style={{ color: 'var(--brand-primary)' }}>{testClientIP}</strong>
               </div>
             </div>
           </div>
@@ -185,7 +191,7 @@ export const ProxyCredentialsPage: React.FC = () => {
           <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
             <button
               type="button"
-              onClick={() => handleApplyBulkIPWhitelist('110.227.184.49')}
+              onClick={() => handleApplyBulkIPWhitelist(testClientIP)}
               style={{
                 background: 'rgba(92, 60, 246, 0.1)',
                 border: '1px solid rgba(92, 60, 246, 0.25)',
@@ -197,7 +203,7 @@ export const ProxyCredentialsPage: React.FC = () => {
                 cursor: 'pointer',
               }}
             >
-              Whitelist My IP on All Proxies (110.227.184.49)
+              Whitelist My Device IP on All Proxies ({testClientIP})
             </button>
             <button
               type="button"
@@ -692,10 +698,9 @@ export const ProxyCredentialsPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => {
-                    const myIp = '110.227.184.49';
                     const parts = bulkIpText ? bulkIpText.split(',').map((s) => s.trim()).filter(Boolean) : [];
-                    if (!parts.includes(myIp)) {
-                      setBulkIpText([...parts, myIp].join(', '));
+                    if (!parts.includes(testClientIP)) {
+                      setBulkIpText([...parts, testClientIP].join(', '));
                     }
                   }}
                   style={{
@@ -709,7 +714,7 @@ export const ProxyCredentialsPage: React.FC = () => {
                     cursor: 'pointer',
                   }}
                 >
-                  + Add My IP (110.227.184.49)
+                  + Add My Device IP ({testClientIP})
                 </button>
               </div>
 

@@ -6,6 +6,7 @@ import { formatTrafficBytes } from '../../config/proxyPlans';
 import { useToast } from '../../context/ToastContext';
 import { proxyService } from '../../services/proxyService';
 import { copyToClipboard } from '../../utils/clipboard';
+import { detectDeviceIP } from '../../utils/deviceIp';
 
 interface ProxyCredentialCardProps {
   endpoint: ProxyEndpointConfig;
@@ -23,6 +24,11 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
   const [useLocalHost, setUseLocalHost] = useState(false);
   const [showIpEdit, setShowIpEdit] = useState(false);
   const [ipInput, setIpInput] = useState((endpoint.ipWhitelist || []).join(', '));
+  const [deviceIp, setDeviceIp] = useState('110.227.184.49');
+
+  useEffect(() => {
+    detectDeviceIP().then(setDeviceIp);
+  }, []);
 
   useEffect(() => {
     setIpInput((endpoint.ipWhitelist || []).join(', '));
@@ -327,10 +333,9 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
                 <button
                   type="button"
                   onClick={() => {
-                    const myIp = '110.227.184.49';
                     const cur = ipInput ? ipInput.split(',').map((s) => s.trim()).filter(Boolean) : [];
-                    if (!cur.includes(myIp)) {
-                      setIpInput([...cur, myIp].join(', '));
+                    if (!cur.includes(deviceIp)) {
+                      setIpInput([...cur, deviceIp].join(', '));
                     }
                   }}
                   style={{
@@ -343,7 +348,7 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
                     padding: 0,
                   }}
                 >
-                  + Add My IP (110.227.184.49)
+                  + Add My Device IP ({deviceIp})
                 </button>
                 <button
                   type="button"

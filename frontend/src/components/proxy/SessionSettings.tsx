@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { ProxyRotationMode } from '../../types';
+import { detectDeviceIP } from '../../utils/deviceIp';
 
 interface SessionSettingsProps {
   rotationMode: ProxyRotationMode;
@@ -18,6 +19,12 @@ export const SessionSettings: React.FC<SessionSettingsProps> = ({
   onChangeDuration,
   onChangeWhitelist,
 }) => {
+  const [deviceIp, setDeviceIp] = useState('110.227.184.49');
+
+  useEffect(() => {
+    detectDeviceIP().then(setDeviceIp);
+  }, []);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
       {/* Rotation Mode Selector */}
@@ -104,9 +111,8 @@ export const SessionSettings: React.FC<SessionSettingsProps> = ({
           <button
             type="button"
             onClick={() => {
-              const myIp = '110.227.184.49';
-              if (!ipWhitelist.includes(myIp)) {
-                onChangeWhitelist([...ipWhitelist, myIp]);
+              if (!ipWhitelist.includes(deviceIp)) {
+                onChangeWhitelist([...ipWhitelist, deviceIp]);
               }
             }}
             style={{
@@ -120,7 +126,7 @@ export const SessionSettings: React.FC<SessionSettingsProps> = ({
               cursor: 'pointer',
             }}
           >
-            + Use My IP (110.227.184.49)
+            + Use My Device IP ({deviceIp})
           </button>
         </div>
         <input
