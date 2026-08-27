@@ -39,10 +39,16 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
   const getBreadcrumbs = () => {
     const path = location.pathname;
     if (path === '/') return [{ label: 'Dashboard', to: '/' }];
-    if (path.startsWith('/billing')) {
+    if (path.startsWith('/settings/billing') || path.startsWith('/billing')) {
       return [
-        { label: 'Billing', to: '/billing' },
-        { label: 'Subscriptions', to: '/billing' },
+        { label: 'Settings', to: '/settings/billing' },
+        { label: 'Billing & Plans', to: '/settings/billing' },
+      ];
+    }
+    if (path.startsWith('/settings/account') || path.startsWith('/account')) {
+      return [
+        { label: 'Settings', to: '/settings/account' },
+        { label: 'Account & Security', to: '/settings/account' },
       ];
     }
     if (path.startsWith('/proxy')) {
@@ -52,11 +58,10 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
         { label: parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : 'Overview', to: path },
       ];
     }
-    if (path.startsWith('/account')) {
-      const parts = path.split('/').filter(Boolean);
+    if (path.startsWith('/plans')) {
       return [
-        { label: 'Account', to: '/account/profile' },
-        { label: parts[1] ? parts[1].charAt(0).toUpperCase() + parts[1].slice(1) : 'Profile', to: path },
+        { label: 'Dashboard', to: '/' },
+        { label: 'Proxy Plans', to: '/plans' },
       ];
     }
     return [{ label: 'Dashboard', to: '/' }];
@@ -68,17 +73,17 @@ export const Header: React.FC<HeaderProps> = ({ onToggleSidebar }) => {
     {
       label: user?.name ? `${user.name} (${user.role || 'customer'})` : 'Account Profile',
       icon: <User size={15} />,
-      onClick: () => navigate('/account/profile'),
+      onClick: () => navigate('/settings/account'),
     },
     {
       label: 'Subscriptions & Billing',
       icon: <Receipt size={15} />,
-      onClick: () => navigate('/billing'),
+      onClick: () => navigate('/settings/billing'),
     },
     {
       label: 'Security & 2FA',
       icon: <Shield size={15} />,
-      onClick: () => navigate('/account/security'),
+      onClick: () => navigate('/settings/account/security'),
     },
     {
       label: 'Sign Out',

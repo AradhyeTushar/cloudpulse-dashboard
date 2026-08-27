@@ -132,20 +132,30 @@ export const App: React.FC = () => {
                 <Route path="/api" element={<Navigate to="/account/api-keys" replace />} />
 
                 {/* =========================================================
-                    BILLING & PLANS
+                    SETTINGS SUITE (Dedicated Settings Sidebar)
                    ========================================================= */}
-                <Route path="/plans" element={<PlansPage />} />
-                <Route path="/billing/plans" element={<Navigate to="/plans" replace />} />
-                <Route path="/billing" element={<BillingLayoutPage />} />
+                <Route path="/settings" element={<Navigate to="/settings/billing" replace />} />
 
-                {/* =========================================================
-                    ACCOUNT SUITE
-                   ========================================================= */}
-                <Route path="/account" element={<Navigate to="/account/profile" replace />} />
-                <Route path="/account/profile" element={<ProfilePage />} />
-                <Route path="/account/api-keys" element={<ApiKeysPage />} />
-                <Route path="/account/security" element={<SecurityPage />} />
-                <Route path="/settings" element={<SettingsPage />} />
+                {/* Billing Related (/settings/billing) */}
+                <Route path="/settings/billing" element={<BillingLayoutPage />} />
+                <Route path="/settings/billing/subscriptions" element={<BillingLayoutPage defaultTab="subscriptions" />} />
+                <Route path="/settings/billing/history" element={<BillingLayoutPage defaultTab="history" />} />
+                <Route path="/settings/billing/methods" element={<BillingLayoutPage defaultTab="methods" />} />
+
+                {/* Account Related (/settings/account) */}
+                <Route path="/settings/account" element={<ProfilePage />} />
+                <Route path="/settings/account/profile" element={<ProfilePage />} />
+                <Route path="/settings/account/security" element={<SecurityPage />} />
+                <Route path="/settings/account/api-keys" element={<ApiKeysPage />} />
+
+                {/* Backwards compatibility aliases */}
+                <Route path="/plans" element={<PlansPage />} />
+                <Route path="/billing" element={<Navigate to="/settings/billing" replace />} />
+                <Route path="/billing/plans" element={<Navigate to="/plans" replace />} />
+                <Route path="/account" element={<Navigate to="/settings/account" replace />} />
+                <Route path="/account/profile" element={<Navigate to="/settings/account/profile" replace />} />
+                <Route path="/account/api-keys" element={<Navigate to="/settings/account/api-keys" replace />} />
+                <Route path="/account/security" element={<Navigate to="/settings/account/security" replace />} />
 
                 {/* =========================================================
                     ADMIN PORTAL (Protected by AdminRoute RBAC)

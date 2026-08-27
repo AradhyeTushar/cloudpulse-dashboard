@@ -7,13 +7,17 @@ import { PaymentMethodsView } from '../../components/billing/PaymentMethodsView'
 
 type BillingTab = 'subscriptions' | 'history' | 'methods';
 
-export const BillingLayoutPage: React.FC = () => {
+interface BillingLayoutPageProps {
+  defaultTab?: BillingTab;
+}
+
+export const BillingLayoutPage: React.FC<BillingLayoutPageProps> = ({ defaultTab }) => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
-  const activeTab = (searchParams.get('tab') as BillingTab) || 'subscriptions';
+  const activeTab = (searchParams.get('tab') as BillingTab) || defaultTab || 'subscriptions';
 
   const setTab = (tab: BillingTab) => {
-    setSearchParams({ tab });
+    navigate(`/settings/billing?tab=${tab}`);
   };
 
   return (
