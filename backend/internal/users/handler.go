@@ -49,7 +49,7 @@ func (h *Handler) SendRegistrationOTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	otp, err := h.service.SendRegistrationOTP(r.Context(), &req)
+	_, err := h.service.SendRegistrationOTP(r.Context(), &req)
 	if err != nil {
 		if errorsIs(err, ErrUserAlreadyExists) {
 			response.Error(w, http.StatusConflict, "USER_EXISTS", "An account with this email already exists")
@@ -60,9 +60,8 @@ func (h *Handler) SendRegistrationOTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response.Success(w, "Verification code sent to your email address", map[string]any{
-		"sent":    true,
-		"email":   req.Email,
-		"dev_otp": otp,
+		"sent":  true,
+		"email": req.Email,
 	})
 }
 

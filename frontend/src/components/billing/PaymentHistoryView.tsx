@@ -28,20 +28,13 @@ export const PaymentHistoryView: React.FC = () => {
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceItem | null>(null);
   const [checkedRows, setCheckedRows] = useState<Record<string, boolean>>({});
 
-  const invoices: InvoiceItem[] = [
-    {
-      paymentId: 'H_49242497',
-      invoiceId: 'HSG-9259769',
-      subscriptionId: '16BgFIVSx2oS81xGC',
-      service: 'KVM 2',
-      hostname: 'srv1920898.hstgr.cloud',
-      period: '2026-08-21 - 2026-09-21',
-      paidAt: '2026-08-21',
-      subtotal: '₹ 1,039.20',
-      taxes: '₹ 187.06',
-      total: '₹ 1,226.26',
-    },
-  ];
+  const [invoices] = useState<InvoiceItem[]>(() => {
+    try {
+      const raw = localStorage.getItem('cloudpulse_invoices');
+      if (raw) return JSON.parse(raw);
+    } catch {}
+    return [];
+  });
 
   const toggleCheck = (id: string) => {
     setCheckedRows((prev) => ({
@@ -242,7 +235,18 @@ export const PaymentHistoryView: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {invoices.map((inv) => (
+            {invoices.length === 0 ? (
+              <tr>
+                <td colSpan={7} style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#6b7280' }}>
+                  <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#f3f4f6', color: '#9ca3af', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.75rem' }}>
+                    <Download size={20} />
+                  </div>
+                  <div style={{ fontWeight: 600, color: '#111827', fontSize: '0.95rem' }}>No Payment History</div>
+                  <div style={{ fontSize: '0.8125rem', marginTop: '0.25rem' }}>Your invoices and transaction receipts will appear here after your first purchase.</div>
+                </td>
+              </tr>
+            ) : (
+              invoices.map((inv) => (
               <tr
                 key={inv.paymentId}
                 onClick={() => setSelectedInvoice(inv)}
@@ -290,7 +294,7 @@ export const PaymentHistoryView: React.FC = () => {
                   <ChevronRight size={18} color="#5b21b6" />
                 </td>
               </tr>
-            ))}
+            )))}
           </tbody>
         </table>
       </div>

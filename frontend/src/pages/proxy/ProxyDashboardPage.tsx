@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Plus, Copy, Check, ArrowRight } from 'lucide-react';
+import { Plus, Copy, Check, ArrowRight, Zap } from 'lucide-react';
 import { proxyService } from '../../services/proxyService';
 import { ProxyUsageDashboard } from '../../components/proxy/ProxyUsageDashboard';
 import { PlanUpgradeModal } from '../../components/proxy/PlanUpgradeModal';
@@ -48,25 +48,29 @@ export const ProxyDashboardPage: React.FC = () => {
     showToast('Subscription Renewed', 'Your plan has been extended by 28 days.', 'success');
   };
 
+  const primaryEp = endpoints[0];
+  const userCred = primaryEp ? `${primaryEp.username}:${primaryEp.password}` : 'USERNAME:PASSWORD';
+  const proxyTarget = `${userCred}@${window.location.hostname || '200.234.41.58'}:8000`;
+
   const codeSnippets = {
     python: `import requests
 
 proxies = {
-    "http": "http://cp_72ab91:p_sec_99182a@pr.cloudpulse.net:8000",
-    "https": "http://cp_72ab91:p_sec_99182a@pr.cloudpulse.net:8000"
+    "http": "http://${proxyTarget}",
+    "https": "http://${proxyTarget}"
 }
 
-response = requests.get("https://ipinfo.io/json", proxies=proxies)
-print("Assigned Proxy IP:", response.json())`,
-    curl: `curl -x http://cp_72ab91:p_sec_99182a@pr.cloudpulse.net:8000 "https://ipinfo.io/json"`,
+response = requests.get("https://httpbin.org/ip", proxies=proxies)
+print("Assigned Egress IP:", response.json())`,
+    curl: `curl -x http://${proxyTarget} "https://httpbin.org/ip"`,
     node: `const axios = require('axios');
 const { HttpsProxyAgent } = require('https-proxy-agent');
 
-const agent = new HttpsProxyAgent('http://cp_72ab91:p_sec_99182a@pr.cloudpulse.net:8000');
+const agent = new HttpsProxyAgent('http://${proxyTarget}');
 
 async function run() {
-  const res = await axios.get('https://ipinfo.io/json', { httpsAgent: agent });
-  console.log('Proxy IP:', res.data);
+  const res = await axios.get('https://httpbin.org/ip', { httpsAgent: agent });
+  console.log('Assigned Egress IP:', res.data);
 }
 run();`,
     go: `package main
@@ -79,10 +83,10 @@ import (
 )
 
 func main() {
-	proxyURL, _ := url.Parse("http://cp_72ab91:p_sec_99182a@pr.cloudpulse.net:8000")
+	proxyURL, _ := url.Parse("http://${proxyTarget}")
 	client := &http.Client{Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL)}}
 
-	resp, _ := client.Get("https://ipinfo.io/json")
+	resp, _ := client.Get("https://httpbin.org/ip")
 	body, _ := io.ReadAll(resp.Body)
 	fmt.Println(string(body))
 }`,
@@ -255,15 +259,61 @@ func main() {
           </NavLink>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
-          {endpoints.slice(0, 3).map((ep) => (
-            <ProxyCredentialCard
-              key={ep.id}
-              endpoint={ep}
-              onDelete={handleDeleteEndpoint}
-            />
-          ))}
-        </div>
+        {endpoints.length === 0 ? (
+          <div
+            className="card"
+            style={{
+              padding: '3rem 1.5rem',
+              textAlign: 'center',
+              background: 'var(--bg-surface)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px dashed var(--border-color)',
+            }}
+          >
+            <div
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: '50%',
+                background: 'rgba(92, 60, 246, 0.1)',
+                color: 'var(--brand-primary)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '1rem',
+              }}
+            >
+              <Zap size={22} />
+            </div>
+            <h3 style={{ fontSize: '1.15rem', fontWeight: 700, margin: '0 0 0.5rem 0', color: 'var(--text-primary)' }}>
+              No Active Proxies Yet
+            </h3>
+            <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '440px', margin: '0 auto 1.5rem auto', lineHeight: 1.5 }}>
+              You haven't generated any proxy credentials yet. Create your first endpoint to start routing high-speed scraping or automation traffic through clean residential IPs.
+            </p>
+            <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <NavLink to="/proxy/credentials">
+                <Button variant="primary">
+                  <Plus size={15} style={{ marginRight: '0.4rem' }} />
+                  Create Your First Proxy
+                </Button>
+              </NavLink>
+              <Button variant="secondary" onClick={() => setShowUpgradeModal(true)}>
+                View Proxy Plans
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
+            {endpoints.slice(0, 3).map((ep) => (
+              <ProxyCredentialCard
+                key={ep.id}
+                endpoint={ep}
+                onDelete={handleDeleteEndpoint}
+              />
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Plan Upgrade / Matrix Modal */}

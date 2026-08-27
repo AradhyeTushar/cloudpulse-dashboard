@@ -186,36 +186,8 @@ function getInitialUserEndpoints(email: string, plan: ProxyPlanConfig): ProxyEnd
     ];
   }
 
-  // New clean user starts with 1 free active endpoint (valid 12h, 50MB)
-  const isFree = plan.isFree;
-  const validityMs = (isFree ? 12 : 28 * 24) * 3600 * 1000;
-  const limitBytes = isFree ? 50 * 1024 * 1024 : plan.trafficLimitBytes;
-  const prefix = email ? email.split('@')[0].slice(0, 6) : 'user';
-
-  return [
-    {
-      id: 'ep_' + Math.random().toString(36).substring(2, 9),
-      name: `${prefix.toUpperCase()} Primary Gateway`,
-      proxyType: 'residential',
-      protocol: 'http',
-      host: 'pr.cloudpulse.net',
-      port: 8000,
-      username: 'cp_' + Math.random().toString(36).substring(2, 8),
-      password: 'p_sec_' + Math.random().toString(36).substring(2, 12),
-      rotationMode: 'sticky',
-      sessionDurationMin: 10,
-      country: 'United States',
-      countryCode: 'US',
-      ipWhitelist: [],
-      createdAt: now.toISOString(),
-      expiresAt: new Date(now.getTime() + validityMs).toISOString(),
-      status: 'Active',
-      usedBytes: isFree ? 8.4 * 1024 * 1024 : 120 * 1024 * 1024,
-      limitBytes: limitBytes,
-      isFree: isFree,
-      planId: plan.id,
-    },
-  ];
+  // New user starts with ZERO (0) active proxies until they create or purchase one
+  return [];
 }
 
 function evaluateEndpointStatus(

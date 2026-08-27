@@ -37,58 +37,25 @@ export const SubscriptionsView: React.FC = () => {
 
   const buildSubscriptions = (sub: typeof currentSub): SubscriptionRow[] => {
     const plan = getPlanConfig(sub.planId);
-    const expiryFormatted = sub.expiresAt ? sub.expiresAt.split('T')[0] : '2026-09-23';
+    
+    // If on free tier or no paid plan, user has not purchased any subscription
+    if (plan.isFree) {
+      return [];
+    }
+
+    const expiryFormatted = sub.expiresAt ? sub.expiresAt.split('T')[0] : '';
 
     return [
       {
         id: 'sub-active-proxy-plan',
         name: `${plan.name} Residential Proxy Plan`,
-        badge: plan.isFree ? 'Free Tier' : 'Active Plan',
+        badge: 'Active Plan',
         subtitle: `${plan.trafficLimitDisplay} traffic • Max ${plan.maxProxies} ${plan.maxProxies === 1 ? 'proxy' : 'proxies'} • ${plan.validityDisplay}`,
         expirationDate: expiryFormatted,
         autoRenewal: sub.autoRenew,
         renewalPrice: plan.priceDisplay,
         actionType: 'upgrade',
         isProxyPlan: true,
-      },
-      {
-        id: 'sub-hosting-trial',
-        name: 'Premium Web Hosting',
-        badge: 'Free trial',
-        subtitle: '—',
-        expirationDate: '2027-08-25',
-        autoRenewal: true,
-        renewalPrice: '₹ 2,628.00',
-        actionType: 'setup',
-        statusText: 'Pending setup',
-      },
-      {
-        id: 'sub-kvm-2',
-        name: 'KVM 2',
-        subtitle: 'srv1920898.hstgr.cloud',
-        expirationDate: '2026-09-21',
-        autoRenewal: false,
-        renewalPrice: '₹ 2,099.00',
-        actionType: 'renew',
-      },
-      {
-        id: 'sub-reach-100',
-        name: 'Reach 100 (Email marketing)',
-        badge: 'Free trial',
-        subtitle: 'vpsphere.tech',
-        expirationDate: '2027-08-21',
-        autoRenewal: false,
-        renewalPrice: '₹ 1,548.00',
-        actionType: 'upgrade',
-      },
-      {
-        id: 'sub-tech-domain',
-        name: '.TECH Domain',
-        subtitle: 'vpsphere.tech',
-        expirationDate: '2027-08-21',
-        autoRenewal: false,
-        renewalPrice: '₹ 6,199.00',
-        actionType: 'renew',
       },
     ];
   };
@@ -233,7 +200,35 @@ export const SubscriptionsView: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredSubs.map((sub) => (
+              {filteredSubs.length === 0 ? (
+                <tr>
+                  <td colSpan={5} style={{ padding: '3.5rem 1.5rem', textAlign: 'center', color: '#6b7280' }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#ede9fe', color: '#6366f1', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: '0.85rem' }}>
+                      <Zap size={20} />
+                    </div>
+                    <div style={{ fontWeight: 600, color: '#111827', fontSize: '1rem', marginBottom: '0.35rem' }}>No Active Subscriptions</div>
+                    <div style={{ fontSize: '0.85rem', maxWidth: '380px', margin: '0 auto 1.25rem auto' }}>
+                      You have not purchased any paid proxy plans yet. Choose a plan to activate dedicated residential bandwidth.
+                    </div>
+                    <button
+                      onClick={() => setShowUpgradeModal(true)}
+                      style={{
+                        padding: '0.5rem 1.2rem',
+                        background: '#6366f1',
+                        color: '#ffffff',
+                        borderRadius: '8px',
+                        fontWeight: 600,
+                        border: 'none',
+                        cursor: 'pointer',
+                        fontSize: '0.8125rem',
+                      }}
+                    >
+                      Browse Proxy Plans
+                    </button>
+                  </td>
+                </tr>
+              ) : (
+                filteredSubs.map((sub) => (
                 <tr
                   key={sub.id}
                   style={{
@@ -347,7 +342,7 @@ export const SubscriptionsView: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+              )))}
             </tbody>
           </table>
         </div>

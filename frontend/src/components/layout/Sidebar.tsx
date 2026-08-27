@@ -20,6 +20,7 @@ import {
   ArrowRightLeft,
   Lock,
   LogOut,
+  Settings,
 } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
@@ -36,8 +37,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   const { showToast } = useToast();
 
   const [proxyOpen, setProxyOpen] = useState(true);
-  const [billingOpen, setBillingOpen] = useState(true);
-  const [accountOpen, setAccountOpen] = useState(true);
+  const [settingsOpen, setSettingsOpen] = useState(true);
 
   const isSuperUser = user?.role === 'admin' || user?.role === 'owner';
   const isAdminView = location.pathname.startsWith('/admin');
@@ -202,81 +202,74 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
                 )}
               </div>
 
-              {/* Billing & Plans */}
+              {/* Proxy Plans Direct Access */}
+              <NavLink to="/plans" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={onClose} style={{ marginTop: '0.4rem' }}>
+                <Layers className="nav-item-icon" />
+                <span>Proxy Plans</span>
+              </NavLink>
+
+              {/* Settings (Consolidated Account & Billing) */}
               <div style={{ marginTop: '0.5rem' }}>
                 <button
                   type="button"
-                  onClick={() => setBillingOpen(!billingOpen)}
+                  onClick={() => setSettingsOpen(!settingsOpen)}
                   className="nav-item"
                   style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                    <Receipt className="nav-item-icon" />
-                    <span style={{ fontWeight: 600 }}>Billing & Plans</span>
+                    <Settings className="nav-item-icon" />
+                    <span style={{ fontWeight: 600 }}>Settings</span>
                   </div>
-                  {billingOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                  {settingsOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                 </button>
 
-                {billingOpen && (
+                {settingsOpen && (
                   <div style={{ paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.1rem', marginTop: '0.2rem' }}>
-                    <NavLink to="/plans" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-                      <Layers size={14} className="nav-item-icon" />
-                      <span>Proxy Plans</span>
+                    <NavLink
+                      to="/settings?tab=profile"
+                      className={() => `nav-item ${(location.pathname === '/settings' && (!location.search || location.search.includes('tab=profile') || location.search.includes('tab=account'))) || location.pathname === '/account/profile' ? 'active' : ''}`}
+                      onClick={onClose}
+                    >
+                      <User size={14} className="nav-item-icon" />
+                      <span>Account Profile</span>
                     </NavLink>
                     <NavLink
-                      to="/billing?tab=subscriptions"
-                      className={() => `nav-item ${location.pathname === '/billing' && (!location.search || location.search.includes('tab=subscriptions')) ? 'active' : ''}`}
+                      to="/settings?tab=subscriptions"
+                      className={() => `nav-item ${(location.pathname === '/settings' && (location.search.includes('tab=subscriptions') || location.search.includes('tab=billing'))) || (location.pathname === '/billing' && (!location.search || location.search.includes('tab=subscriptions'))) ? 'active' : ''}`}
+                      onClick={onClose}
+                    >
+                      <Layers size={14} className="nav-item-icon" />
+                      <span>Billing & Plans</span>
+                    </NavLink>
+                    <NavLink
+                      to="/settings?tab=history"
+                      className={() => `nav-item ${(location.pathname === '/settings' && location.search.includes('tab=history')) || (location.pathname === '/billing' && location.search.includes('tab=history')) ? 'active' : ''}`}
                       onClick={onClose}
                     >
                       <Receipt size={14} className="nav-item-icon" />
-                      <span>Subscriptions</span>
-                    </NavLink>
-                    <NavLink
-                      to="/billing?tab=history"
-                      className={() => `nav-item ${location.pathname === '/billing' && location.search.includes('tab=history') ? 'active' : ''}`}
-                      onClick={onClose}
-                    >
-                      <Server size={14} className="nav-item-icon" />
                       <span>Payment History</span>
                     </NavLink>
                     <NavLink
-                      to="/billing?tab=methods"
-                      className={() => `nav-item ${location.pathname === '/billing' && location.search.includes('tab=methods') ? 'active' : ''}`}
+                      to="/settings?tab=methods"
+                      className={() => `nav-item ${(location.pathname === '/settings' && location.search.includes('tab=methods')) || (location.pathname === '/billing' && location.search.includes('tab=methods')) ? 'active' : ''}`}
                       onClick={onClose}
                     >
                       <Key size={14} className="nav-item-icon" />
                       <span>Payment Methods</span>
                     </NavLink>
-                  </div>
-                )}
-              </div>
-
-              {/* Account */}
-              <div style={{ marginTop: '0.5rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setAccountOpen(!accountOpen)}
-                  className="nav-item"
-                  style={{ width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'none', border: 'none', cursor: 'pointer' }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
-                    <User className="nav-item-icon" />
-                    <span style={{ fontWeight: 600 }}>Account</span>
-                  </div>
-                  {accountOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
-
-                {accountOpen && (
-                  <div style={{ paddingLeft: '1.25rem', display: 'flex', flexDirection: 'column', gap: '0.1rem', marginTop: '0.2rem' }}>
-                    <NavLink to="/account/profile" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
-                      <User size={14} className="nav-item-icon" />
-                      <span>Profile</span>
-                    </NavLink>
-                    <NavLink to="/account/api-keys" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
+                    <NavLink
+                      to="/settings?tab=api-keys"
+                      className={() => `nav-item ${(location.pathname === '/settings' && location.search.includes('tab=api-keys')) || location.pathname === '/account/api-keys' ? 'active' : ''}`}
+                      onClick={onClose}
+                    >
                       <Key size={14} className="nav-item-icon" />
                       <span>API Keys</span>
                     </NavLink>
-                    <NavLink to="/account/security" className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`} onClick={onClose}>
+                    <NavLink
+                      to="/settings?tab=security"
+                      className={() => `nav-item ${(location.pathname === '/settings' && location.search.includes('tab=security')) || location.pathname === '/account/security' ? 'active' : ''}`}
+                      onClick={onClose}
+                    >
                       <Lock size={14} className="nav-item-icon" />
                       <span>Security & 2FA</span>
                     </NavLink>
@@ -293,7 +286,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             <div
               style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', overflow: 'hidden', cursor: 'pointer', flex: 1 }}
               onClick={() => {
-                navigate('/account/profile');
+                navigate('/settings?tab=profile');
                 onClose();
               }}
             >

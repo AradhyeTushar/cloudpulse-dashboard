@@ -15,6 +15,7 @@ import {
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../../context/ToastContext';
+import { useAuth } from '../../context/AuthContext';
 import { UserProfile } from '../../types';
 
 interface AccountInfoSectionProps {
@@ -23,20 +24,21 @@ interface AccountInfoSectionProps {
 
 export const AccountInfoSection: React.FC<AccountInfoSectionProps> = ({ onNavigateTo2FA }) => {
   const { showToast } = useToast();
+  const { user } = useAuth();
 
   // Profile Form States
   const [profileData, setProfileData] = useState({
-    name: '-',
+    name: user?.name || 'Customer Account',
     address: '-',
     phone: '-',
-    company: '-',
+    company: user?.workspaceName || '-',
     currency: 'USD',
-    email: 'admin@cloudhost.net',
+    email: user?.email || 'user@example.com',
     recoveryEmail: '-',
-    passwordSet: false,
-    googleConnected: true,
+    passwordSet: true,
+    googleConnected: false,
     githubConnected: false,
-    memberSince: '2026-01-15 10:00',
+    memberSince: (user as any)?.createdAt ? String((user as any).createdAt).split('T')[0] : '2026-08-27',
   });
 
   // Edit Modal State
