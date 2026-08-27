@@ -211,42 +211,97 @@ func main() {
           </div>
         </div>
 
+        {/* Helper Banner when no proxies exist yet */}
+        {!primaryEp && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '0.5rem',
+              padding: '0.55rem 0.85rem',
+              background: 'rgba(92, 60, 246, 0.08)',
+              border: '1px solid rgba(92, 60, 246, 0.2)',
+              borderRadius: '6px',
+              marginBottom: '0.85rem',
+              fontSize: '0.78rem',
+              color: 'var(--text-secondary)',
+            }}
+          >
+            <span>
+              🇮🇳 <strong>India Edge Gateway:</strong> Deploy your first proxy to automatically populate live authenticated credentials.
+            </span>
+            <NavLink to="/proxy/credentials" style={{ fontWeight: 700, color: 'var(--brand-primary)', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+              + Create India Proxy →
+            </NavLink>
+          </div>
+        )}
+
         {/* Code Box */}
         <div
           style={{
             position: 'relative',
-            background: '#0d1117',
-            border: '1px solid #30363d',
+            background: '#090d16',
+            border: '1px solid #232a3b',
             borderRadius: 'var(--radius-md)',
-            padding: '1.25rem',
-            fontFamily: 'var(--font-mono)',
-            fontSize: '0.8125rem',
-            color: '#c9d1d9',
-            overflowX: 'auto',
+            overflow: 'hidden',
+            boxShadow: '0 4px 16px rgba(0,0,0,0.25)',
           }}
         >
-          <button
-            onClick={copyCode}
+          {/* Terminal Window Bar */}
+          <div
             style={{
-              position: 'absolute',
-              top: '0.75rem',
-              right: '0.75rem',
-              display: 'inline-flex',
+              display: 'flex',
               alignItems: 'center',
-              gap: '0.35rem',
-              fontSize: '0.75rem',
-              padding: '0.35rem 0.65rem',
-              borderRadius: 'var(--radius-sm)',
-              background: '#21262d',
-              border: '1px solid #30363d',
-              color: '#c9d1d9',
-              cursor: 'pointer',
+              justifyContent: 'space-between',
+              padding: '0.5rem 0.85rem',
+              background: '#111726',
+              borderBottom: '1px solid #232a3b',
             }}
           >
-            {copiedCode ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
-            <span>{copiedCode ? 'Copied' : 'Copy'}</span>
-          </button>
-          <pre style={{ margin: 0 }}>{codeSnippets[activeTab]}</pre>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#ef4444' }} />
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#f59e0b' }} />
+              <div style={{ width: 10, height: 10, borderRadius: '50%', background: '#10b981' }} />
+              <span style={{ fontSize: '0.7rem', color: '#64748b', marginLeft: '0.5rem', fontFamily: 'var(--font-mono)' }}>
+                {activeTab === 'python' ? 'scrape_india.py' : activeTab === 'curl' ? 'curl_test.sh' : activeTab === 'node' ? 'proxy_client.js' : 'main.go'}
+              </span>
+            </div>
+
+            <button
+              onClick={copyCode}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                fontSize: '0.75rem',
+                padding: '0.25rem 0.65rem',
+                borderRadius: '4px',
+                background: '#1e293b',
+                border: '1px solid #334155',
+                color: '#e2e8f0',
+                cursor: 'pointer',
+                transition: 'all 0.15s ease',
+              }}
+            >
+              {copiedCode ? <Check size={13} color="#10b981" /> : <Copy size={13} />}
+              <span>{copiedCode ? 'Copied' : 'Copy'}</span>
+            </button>
+          </div>
+
+          <pre
+            style={{
+              margin: 0,
+              padding: '1.15rem 1.25rem',
+              fontFamily: 'var(--font-mono)',
+              fontSize: '0.825rem',
+              lineHeight: 1.6,
+              color: '#e2e8f0',
+              overflowX: 'auto',
+            }}
+          >
+            {codeSnippets[activeTab]}
+          </pre>
         </div>
       </div>
 

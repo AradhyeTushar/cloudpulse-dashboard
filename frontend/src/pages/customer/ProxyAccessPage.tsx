@@ -28,7 +28,7 @@ export const ProxyAccessPage: React.FC = () => {
   const [protocol, setProtocol] = useState<ProxyProtocol>('http');
   const [rotationMode, setRotationMode] = useState<ProxyRotationMode>('rotating');
   const [sessionDurationMin, setSessionDurationMin] = useState(15);
-  const [country, setCountry] = useState('United States');
+  const [country, setCountry] = useState('India');
   const [ipWhitelist, setIpWhitelist] = useState('');
 
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -51,7 +51,7 @@ export const ProxyAccessPage: React.FC = () => {
       rotationMode,
       sessionDurationMin: rotationMode === 'sticky' ? sessionDurationMin : 0,
       country,
-      countryCode: country === 'United States' ? 'US' : country === 'Germany' ? 'DE' : 'GB',
+      countryCode: country === 'India' ? 'IN' : country === 'United States' ? 'US' : country === 'Germany' ? 'DE' : 'GB',
       ipWhitelist: ipWhitelist ? ipWhitelist.split(',').map((s) => s.trim()) : [],
     });
 
@@ -256,6 +256,7 @@ export const ProxyAccessPage: React.FC = () => {
                   Target Country
                 </label>
                 <select className="input-field" value={country} onChange={(e) => setCountry(e.target.value)}>
+                  <option value="India">India (IN) - Mumbai / Delhi</option>
                   <option value="United States">United States (US)</option>
                   <option value="Germany">Germany (DE)</option>
                   <option value="United Kingdom">United Kingdom (GB)</option>

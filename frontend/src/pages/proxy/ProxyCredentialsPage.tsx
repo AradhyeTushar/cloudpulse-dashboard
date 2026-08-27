@@ -26,8 +26,8 @@ export const ProxyCredentialsPage: React.FC = () => {
   const [protocol, setProtocol] = useState<ProxyProtocol>('http');
   const [rotationMode, setRotationMode] = useState<ProxyRotationMode>('rotating');
   const [sessionDurationMin, setSessionDurationMin] = useState(10);
-  const [targetCountry, setTargetCountry] = useState('United States');
-  const [targetCountryCode, setTargetCountryCode] = useState('US');
+  const [targetCountry, setTargetCountry] = useState('India');
+  const [targetCountryCode, setTargetCountryCode] = useState('IN');
   const [ipWhitelist, setIpWhitelist] = useState<string[]>([]);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -404,9 +404,142 @@ export const ProxyCredentialsPage: React.FC = () => {
 
       {/* Grid of Credentials */}
       {filtered.length === 0 ? (
-        <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-          No proxy endpoints found matching your criteria.
-        </div>
+        endpoints.length === 0 ? (
+          <div
+            className="card"
+            style={{
+              padding: '3rem 2rem',
+              textAlign: 'center',
+              background: 'var(--bg-surface)',
+              borderRadius: 'var(--radius-lg)',
+              border: '1px solid var(--border-color)',
+              boxShadow: '0 4px 20px -2px rgba(0,0,0,0.05)',
+            }}
+          >
+            <div
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: '16px',
+                background: 'linear-gradient(135deg, rgba(92, 60, 246, 0.12), rgba(16, 185, 129, 0.12))',
+                color: 'var(--brand-primary)',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginBottom: '1.25rem',
+                fontSize: '1.75rem',
+              }}
+            >
+              🇮🇳
+            </div>
+            <div style={{ display: 'inline-block', marginBottom: '0.75rem' }}>
+              <span
+                style={{
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  padding: '0.25rem 0.75rem',
+                  borderRadius: 'var(--radius-full)',
+                  background: 'rgba(16, 185, 129, 0.12)',
+                  color: '#10b981',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                }}
+              >
+                ● 11.2M+ Clean India IPs Active • 12ms Avg Latency
+              </span>
+            </div>
+            <h3 style={{ fontSize: '1.35rem', fontWeight: 800, margin: '0 0 0.5rem 0', color: 'var(--text-primary)' }}>
+              No Proxy Endpoints Deployed Yet
+            </h3>
+            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', maxWidth: '520px', margin: '0 auto 1.75rem auto', lineHeight: 1.6 }}>
+              Deploy your first high-performance residential proxy endpoint in <strong>India</strong> (or 195+ global locations). Fully authenticated with HTTP/SOCKS5 support, IP whitelisting, and rotating IP sessions.
+            </p>
+            <div style={{ display: 'flex', gap: '0.85rem', justifyContent: 'center', flexWrap: 'wrap', marginBottom: '2.5rem' }}>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setTargetCountry('India');
+                  setTargetCountryCode('IN');
+                  setShowCreateModal(true);
+                }}
+                style={{ padding: '0.6rem 1.25rem', fontSize: '0.875rem' }}
+              >
+                <Plus size={16} style={{ marginRight: '0.4rem' }} />
+                Deploy India Proxy Endpoint
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setShowUpgradeModal(true)}
+                style={{ padding: '0.6rem 1.25rem', fontSize: '0.875rem' }}
+              >
+                <Zap size={15} style={{ marginRight: '0.4rem' }} />
+                View Proxy Plans
+              </Button>
+            </div>
+
+            {/* Feature Capability Highlights */}
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+                gap: '1rem',
+                textAlign: 'left',
+                borderTop: '1px solid var(--border-color)',
+                paddingTop: '1.75rem',
+                maxWidth: '900px',
+                margin: '0 auto',
+              }}
+            >
+              <div style={{ padding: '0.75rem', borderRadius: '8px', background: 'var(--bg-subtle)' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
+                  🇮🇳 India Peering
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                  Mumbai, Delhi & Bengaluru nodes with sub-15ms response latency.
+                </div>
+              </div>
+              <div style={{ padding: '0.75rem', borderRadius: '8px', background: 'var(--bg-subtle)' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
+                  🔒 IP Whitelist Shield
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                  Restrict credentials to your authorized client IP ({testClientIP || '110.227.184.49'}).
+                </div>
+              </div>
+              <div style={{ padding: '0.75rem', borderRadius: '8px', background: 'var(--bg-subtle)' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
+                  🔄 Dual Rotation Engines
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                  Maintain sticky sessions for 10-30 min or rotate on every HTTP request.
+                </div>
+              </div>
+              <div style={{ padding: '0.75rem', borderRadius: '8px', background: 'var(--bg-subtle)' }}>
+                <div style={{ fontWeight: 700, fontSize: '0.85rem', color: 'var(--text-primary)', marginBottom: '0.2rem' }}>
+                  ⚡ Free Tier Slots
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', lineHeight: 1.4 }}>
+                  50 proxy test slots included with 50 MB / 12h per proxy allowance.
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="card" style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
+            <p style={{ margin: '0 0 1rem 0' }}>No proxy endpoints matching "{searchTerm || statusFilter}".</p>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                setSearchTerm('');
+                setStatusFilter('all');
+              }}
+              style={{ fontSize: '0.8rem' }}
+            >
+              Clear Filters
+            </Button>
+          </div>
+        )
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
           {filtered.map((ep) => (

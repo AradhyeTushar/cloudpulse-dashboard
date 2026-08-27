@@ -66,6 +66,18 @@ export const MOCK_PROXY_ENDPOINTS: ProxyEndpointConfig[] = [
 
 export const MOCK_LOCATIONS: ProxyLocationNode[] = [
   {
+    id: 'loc_in',
+    country: 'India',
+    countryCode: 'IN',
+    flag: '🇮🇳',
+    region: 'Asia-Pacific',
+    totalIPs: 11200000,
+    availableIPs: 10950000,
+    avgLatencyMs: 12,
+    status: 'optimal',
+    activeNodes: 1840,
+  },
+  {
     id: 'loc_us',
     country: 'United States',
     countryCode: 'US',
@@ -136,18 +148,6 @@ export const MOCK_LOCATIONS: ProxyLocationNode[] = [
     avgLatencyMs: 95,
     status: 'moderate',
     activeNodes: 380,
-  },
-  {
-    id: 'loc_in',
-    country: 'India',
-    countryCode: 'IN',
-    flag: '🇮🇳',
-    region: 'Asia-Pacific',
-    totalIPs: 9100000,
-    availableIPs: 8920000,
-    avgLatencyMs: 58,
-    status: 'optimal',
-    activeNodes: 840,
   },
 ];
 
