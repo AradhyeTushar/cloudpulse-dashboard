@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
-  ArrowLeft,
   ChevronRight,
+  Home,
+  ArrowLeft,
   Download,
   Info,
 } from 'lucide-react';
@@ -13,6 +14,7 @@ interface InvoiceItem {
   invoiceId: string;
   subscriptionId: string;
   service: string;
+  hostname: string;
   period: string;
   paidAt: string;
   subtotal: string;
@@ -22,9 +24,9 @@ interface InvoiceItem {
 
 export const PaymentHistoryView: React.FC = () => {
   const { showToast } = useToast();
-  const [activeTab, setActiveTab] = useState<'payment' | 'refund'>('payment');
+  const [subTab, setSubTab] = useState<'history' | 'refund'>('history');
   const [selectedInvoice, setSelectedInvoice] = useState<InvoiceItem | null>(null);
-  const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({});
+  const [checkedRows, setCheckedRows] = useState<Record<string, boolean>>({});
 
   const invoices: InvoiceItem[] = [
     {
@@ -32,6 +34,7 @@ export const PaymentHistoryView: React.FC = () => {
       invoiceId: 'HSG-9259769',
       subscriptionId: '16BgFIVSx2oS81xGC',
       service: 'KVM 2',
+      hostname: 'srv1920898.hstgr.cloud',
       period: '2026-08-21 - 2026-09-21',
       paidAt: '2026-08-21',
       subtotal: '₹ 1,039.20',
@@ -40,10 +43,10 @@ export const PaymentHistoryView: React.FC = () => {
     },
   ];
 
-  const handleToggleRow = (paymentId: string) => {
-    setSelectedRows((prev) => ({
+  const toggleCheck = (id: string) => {
+    setCheckedRows((prev) => ({
       ...prev,
-      [paymentId]: !prev[paymentId],
+      [id]: !prev[id],
     }));
   };
 
@@ -51,96 +54,98 @@ export const PaymentHistoryView: React.FC = () => {
     showToast('Downloading Invoice', `Invoice ${inv.invoiceId} PDF downloading...`, 'success');
   };
 
-  // If user clicked an invoice, show Payment details (Screenshot 4)
   if (selectedInvoice) {
     return (
-      <div>
-        {/* Back Button */}
+      <div style={{ width: '100%' }}>
         <button
-          className="back-to-vps-link"
-          style={{ marginBottom: '1rem', cursor: 'pointer' }}
           onClick={() => setSelectedInvoice(null)}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.35rem',
+            background: 'none',
+            border: 'none',
+            color: '#6b7280',
+            cursor: 'pointer',
+            fontSize: '0.875rem',
+            marginBottom: '1rem',
+          }}
         >
-          <ArrowLeft size={14} />
+          <ArrowLeft size={16} />
           <span>Back</span>
         </button>
 
-        {/* Page Title */}
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '1.25rem' }}>
+        <h1 style={{ fontSize: '1.65rem', fontWeight: 700, color: '#111827', margin: '0 0 1.5rem 0' }}>
           Payment details
         </h1>
 
-        {/* Payment Details Card matching Screenshot 4 */}
-        <div className="card" style={{ padding: '1.75rem', marginBottom: '1.5rem' }}>
-          <div style={{ display: 'flex', gap: '2rem', fontSize: '0.85rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+        <div
+          style={{
+            background: '#ffffff',
+            borderRadius: '12px',
+            border: '1px solid #e5e7eb',
+            padding: '1.75rem',
+          }}
+        >
+          <div style={{ display: 'flex', gap: '2rem', fontSize: '0.875rem', marginBottom: '1.5rem' }}>
             <div>
-              <span style={{ color: 'var(--text-muted)' }}>Payment ID: </span>
-              <strong style={{ color: 'var(--text-primary)' }}>{selectedInvoice.paymentId}</strong>
+              <span style={{ color: '#6b7280' }}>Payment ID: </span>
+              <strong style={{ color: '#111827' }}>{selectedInvoice.paymentId}</strong>
             </div>
             <div>
-              <span style={{ color: 'var(--text-muted)' }}>Invoice ID: </span>
-              <strong style={{ color: 'var(--text-primary)' }}>{selectedInvoice.invoiceId}</strong>
+              <span style={{ color: '#6b7280' }}>Invoice ID: </span>
+              <strong style={{ color: '#111827' }}>{selectedInvoice.invoiceId}</strong>
             </div>
           </div>
 
-          <div style={{ overflowX: 'auto' }}>
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th>Services</th>
-                  <th>Subscription ID</th>
-                  <th>Period</th>
-                  <th style={{ textAlign: 'right' }}>Amount</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td style={{ fontWeight: 600, color: 'var(--text-primary)' }}>
-                    srv1920898.hstgr.cloud - {selectedInvoice.service} (billed every month)
-                  </td>
-                  <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--brand-primary-text)' }}>
-                    {selectedInvoice.subscriptionId}
-                  </td>
-                  <td style={{ color: 'var(--text-secondary)', fontSize: '0.8125rem' }}>
-                    {selectedInvoice.period}
-                  </td>
-                  <td style={{ textAlign: 'right', fontWeight: 600 }}>
-                    {selectedInvoice.subtotal}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #f3f4f6', color: '#4b5563' }}>
+                <th style={{ padding: '0.75rem 0', textAlign: 'left' }}>Services</th>
+                <th style={{ padding: '0.75rem 0', textAlign: 'left' }}>Subscription ID</th>
+                <th style={{ padding: '0.75rem 0', textAlign: 'left' }}>Period</th>
+                <th style={{ padding: '0.75rem 0', textAlign: 'right' }}>Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style={{ padding: '1rem 0', fontWeight: 600 }}>
+                  {selectedInvoice.hostname} - {selectedInvoice.service} (billed every month)
+                </td>
+                <td style={{ padding: '1rem 0', color: '#5b21b6', fontFamily: 'monospace' }}>
+                  {selectedInvoice.subscriptionId}
+                </td>
+                <td style={{ padding: '1rem 0', color: '#6b7280' }}>
+                  {selectedInvoice.period}
+                </td>
+                <td style={{ padding: '1rem 0', textAlign: 'right', fontWeight: 600 }}>
+                  {selectedInvoice.subtotal}
+                </td>
+              </tr>
+            </tbody>
+          </table>
 
-          {/* Payment summary Box matching Screenshot 4 */}
-          <div className="payment-summary-box">
-            <div style={{ fontWeight: 700, fontSize: '0.9rem', color: 'var(--text-primary)', marginBottom: '0.25rem' }}>
-              Payment summary
-            </div>
-            <div className="payment-summary-row">
+          <div style={{ marginTop: '2rem', maxWidth: '300px', marginLeft: 'auto' }}>
+            <div style={{ fontWeight: 700, marginBottom: '0.5rem' }}>Payment summary</div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', color: '#4b5563' }}>
               <span>Subtotal</span>
               <span>{selectedInvoice.subtotal}</span>
             </div>
-            <div className="payment-summary-row">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                <span>Taxes & fees</span>
-                <Info size={13} color="var(--text-dim)" />
-              </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.35rem 0', color: '#4b5563' }}>
+              <span>Taxes & fees</span>
               <span>{selectedInvoice.taxes}</span>
             </div>
-            <div className="payment-summary-row total">
+            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', fontWeight: 700, borderTop: '1px solid #e5e7eb' }}>
               <span>Total</span>
               <span>{selectedInvoice.total}</span>
             </div>
           </div>
 
-          {/* Download Invoice Button */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '1.5rem' }}>
             <Button
               variant="outline"
-              className="btn-pill"
-              icon={<Download size={14} />}
               onClick={() => handleDownloadInvoice(selectedInvoice)}
+              icon={<Download size={14} />}
             >
               Download Invoice
             </Button>
@@ -150,113 +155,144 @@ export const PaymentHistoryView: React.FC = () => {
     );
   }
 
-  // Payment History List Table (Screenshot 3)
   return (
-    <div>
-      {/* Page Title */}
-      <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '1.5rem' }}>
+    <div style={{ width: '100%' }}>
+      {/* Breadcrumb matching Screenshot 2 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.8125rem', color: '#6b7280', marginBottom: '1rem' }}>
+        <Home size={14} color="#6b7280" />
+        <span>›</span>
+        <span>Billing</span>
+        <span>›</span>
+        <span>Payment History</span>
+        <span>›</span>
+        <span style={{ color: '#111827', fontWeight: 600 }}>Paid</span>
+      </div>
+
+      {/* Title */}
+      <h1 style={{ fontSize: '1.65rem', fontWeight: 700, color: '#111827', margin: '0 0 1.25rem 0' }}>
         Payment History
       </h1>
 
-      {/* Tabs */}
-      <div className="card" style={{ marginBottom: '1.5rem', overflow: 'hidden' }}>
-        <div style={{ borderBottom: '1px solid var(--border-color)', display: 'flex', gap: '1.5rem', padding: '0 1.5rem' }}>
-          <button
-            style={{
-              padding: '0.85rem 0',
-              background: 'none',
-              border: 'none',
-              fontSize: '0.875rem',
-              fontWeight: 700,
-              color: activeTab === 'payment' ? 'var(--brand-primary)' : 'var(--text-secondary)',
-              borderBottom: activeTab === 'payment' ? '2px solid var(--brand-primary)' : '2px solid transparent',
-              cursor: 'pointer',
-            }}
-            onClick={() => setActiveTab('payment')}
-          >
-            Payment history
-          </button>
-          <button
-            style={{
-              padding: '0.85rem 0',
-              background: 'none',
-              border: 'none',
-              fontSize: '0.875rem',
-              fontWeight: 500,
-              color: activeTab === 'refund' ? 'var(--brand-primary)' : 'var(--text-secondary)',
-              borderBottom: activeTab === 'refund' ? '2px solid var(--brand-primary)' : '2px solid transparent',
-              cursor: 'pointer',
-            }}
-            onClick={() => setActiveTab('refund')}
-          >
-            Refund history
-          </button>
-        </div>
+      {/* Subtabs matching Screenshot 2 */}
+      <div
+        style={{
+          display: 'flex',
+          gap: '2rem',
+          borderBottom: '1px solid #e5e7eb',
+          marginBottom: '1.5rem',
+        }}
+      >
+        <button
+          type="button"
+          onClick={() => setSubTab('history')}
+          style={{
+            background: 'none',
+            border: 'none',
+            borderBottom: subTab === 'history' ? '2px solid #5b21b6' : '2px solid transparent',
+            padding: '0.65rem 0',
+            color: subTab === 'history' ? '#5b21b6' : '#6b7280',
+            fontWeight: subTab === 'history' ? 700 : 500,
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+          }}
+        >
+          Payment history
+        </button>
 
-        {activeTab === 'refund' ? (
-          <div style={{ padding: '3.5rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-            No refund records found.
-          </div>
-        ) : (
-          <div style={{ overflowX: 'auto' }}>
-            <table className="custom-table">
-              <thead>
-                <tr>
-                  <th style={{ width: '40px' }}>
-                    <input type="checkbox" style={{ accentColor: 'var(--brand-primary)' }} />
-                  </th>
-                  <th>Payment ID</th>
-                  <th>Subscription ID</th>
-                  <th>Service</th>
-                  <th>Paid at</th>
-                  <th>Amount</th>
-                  <th style={{ textAlign: 'right' }}></th>
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.map((inv) => (
-                  <tr
-                    key={inv.paymentId}
+        <button
+          type="button"
+          onClick={() => setSubTab('refund')}
+          style={{
+            background: 'none',
+            border: 'none',
+            borderBottom: subTab === 'refund' ? '2px solid #5b21b6' : '2px solid transparent',
+            padding: '0.65rem 0',
+            color: subTab === 'refund' ? '#5b21b6' : '#6b7280',
+            fontWeight: subTab === 'refund' ? 700 : 500,
+            fontSize: '0.875rem',
+            cursor: 'pointer',
+          }}
+        >
+          Refund history
+        </button>
+      </div>
+
+      {/* Table Container */}
+      <div
+        style={{
+          background: '#ffffff',
+          borderRadius: '12px',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.02)',
+          overflow: 'hidden',
+        }}
+      >
+        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem', textAlign: 'left' }}>
+          <thead>
+            <tr style={{ borderBottom: '1px solid #f3f4f6', color: '#4b5563', fontSize: '0.8125rem' }}>
+              <th style={{ padding: '0.85rem 1rem', width: '30px' }}>
+                <input type="checkbox" style={{ cursor: 'pointer' }} />
+              </th>
+              <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Payment ID</th>
+              <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Subscription ID</th>
+              <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Service</th>
+              <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Paid at</th>
+              <th style={{ padding: '0.85rem 1rem', fontWeight: 600 }}>Amount</th>
+              <th style={{ padding: '0.85rem 1rem', width: '30px' }}></th>
+            </tr>
+          </thead>
+          <tbody>
+            {invoices.map((inv) => (
+              <tr
+                key={inv.paymentId}
+                onClick={() => setSelectedInvoice(inv)}
+                style={{
+                  borderBottom: '1px solid #f3f4f6',
+                  cursor: 'pointer',
+                  transition: 'background 0.15s ease',
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#fafafa')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+              >
+                <td style={{ padding: '1rem 1rem' }} onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={!!checkedRows[inv.paymentId]}
+                    onChange={() => toggleCheck(inv.paymentId)}
                     style={{ cursor: 'pointer' }}
-                    onClick={() => setSelectedInvoice(inv)}
-                  >
-                    <td onClick={(e) => e.stopPropagation()}>
-                      <input
-                        type="checkbox"
-                        checked={!!selectedRows[inv.paymentId]}
-                        onChange={() => handleToggleRow(inv.paymentId)}
-                        style={{ accentColor: 'var(--brand-primary)' }}
-                      />
-                    </td>
-                    <td style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.85rem' }}>
-                      {inv.paymentId}
-                    </td>
-                    <td style={{ fontFamily: 'var(--font-mono)', color: 'var(--brand-primary-text)', fontSize: '0.8125rem' }}>
-                      {inv.subscriptionId}
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 600, color: 'var(--text-primary)', fontSize: '0.85rem' }}>
-                        {inv.service}
-                      </div>
-                      <div style={{ fontSize: '0.775rem', color: 'var(--text-muted)' }}>
-                        srv1920898.hstgr.cloud
-                      </div>
-                    </td>
-                    <td style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem' }}>
-                      {inv.paidAt}
-                    </td>
-                    <td style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '0.85rem' }}>
-                      {inv.total}
-                    </td>
-                    <td style={{ textAlign: 'right' }}>
-                      <ChevronRight size={16} color="var(--brand-primary)" />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
+                  />
+                </td>
+
+                <td style={{ padding: '1rem 1rem', fontWeight: 600, color: '#111827' }}>
+                  {inv.paymentId}
+                </td>
+
+                <td style={{ padding: '1rem 1rem' }}>
+                  <span style={{ color: '#5b21b6', fontFamily: 'monospace', fontWeight: 600 }}>
+                    {inv.subscriptionId}
+                  </span>
+                </td>
+
+                <td style={{ padding: '1rem 1rem' }}>
+                  <div style={{ fontWeight: 600, color: '#111827' }}>{inv.service}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#6b7280' }}>{inv.hostname}</div>
+                </td>
+
+                <td style={{ padding: '1rem 1rem', color: '#4b5563', fontSize: '0.8125rem' }}>
+                  {inv.paidAt}
+                </td>
+
+                <td style={{ padding: '1rem 1rem', fontWeight: 600, color: '#111827' }}>
+                  {inv.total}
+                </td>
+
+                <td style={{ padding: '1rem 1rem', textAlign: 'right' }}>
+                  <ChevronRight size={18} color="#5b21b6" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

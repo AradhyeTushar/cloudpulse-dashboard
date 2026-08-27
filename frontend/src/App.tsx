@@ -58,8 +58,9 @@ import { ProxySessionsPage } from './pages/proxy/ProxySessionsPage';
 import { ProxyLocationsPage } from './pages/proxy/ProxyLocationsPage';
 import { ProxyUsagePage } from './pages/proxy/ProxyUsagePage';
 
-// Billing Page
+// Billing & Plans Pages
 import { BillingLayoutPage } from './pages/billing/BillingLayoutPage';
+import { PlansPage } from './pages/billing/PlansPage';
 
 // Account Suite Pages
 import { ProfilePage } from './pages/account/ProfilePage';
@@ -131,8 +132,10 @@ export const App: React.FC = () => {
                 <Route path="/api" element={<Navigate to="/account/api-keys" replace />} />
 
                 {/* =========================================================
-                    BILLING
+                    BILLING & PLANS
                    ========================================================= */}
+                <Route path="/plans" element={<PlansPage />} />
+                <Route path="/billing/plans" element={<Navigate to="/plans" replace />} />
                 <Route path="/billing" element={<BillingLayoutPage />} />
 
                 {/* =========================================================

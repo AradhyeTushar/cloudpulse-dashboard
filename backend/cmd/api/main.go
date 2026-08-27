@@ -245,6 +245,7 @@ func main() {
 			r.Route("/proxy-credentials", func(r chi.Router) {
 				r.Get("/", credHandler.ListProxyCredentials)
 				r.Post("/", credHandler.CreateProxyCredential)
+				r.Put("/{id}", credHandler.UpdateProxyCredential)
 				r.Post("/{id}/reset", credHandler.ResetProxyCredential)
 				r.Delete("/{id}", credHandler.DeleteProxyCredential)
 			})
@@ -310,12 +311,17 @@ func main() {
 						body.Currency = "INR"
 					}
 
+					razorpayKey := os.Getenv("RAZORPAY_KEY_ID")
+					if razorpayKey == "" {
+						razorpayKey = "rzp_test_cloudpulse_live"
+					}
+
 					orderID := fmt.Sprintf("order_rzp_%d", time.Now().UnixNano()%100000000)
 					response.Success(w, "Razorpay order created", map[string]any{
 						"order_id":   orderID,
 						"amount":     body.Amount,
 						"currency":   body.Currency,
-						"key_id":     "rzp_test_cloudpulse_live",
+						"key_id":     razorpayKey,
 						"name":       "CloudPulse Residential Grid",
 						"created_at": time.Now().Unix(),
 					})

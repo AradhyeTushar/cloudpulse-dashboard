@@ -35,15 +35,15 @@ export const LoginPage: React.FC = () => {
   const [isShaking, setIsShaking] = useState(false);
   const [loginStage, setLoginStage] = useState<'idle' | 'authenticating' | 'success'>('idle');
 
-  // If already authenticated or redirected from Google OAuth, proceed to dashboard
+  // If redirected from Google OAuth or active callback, proceed to dashboard
   useEffect(() => {
     const oauthParam = searchParams.get('oauth');
     const tokenParam = searchParams.get('token');
-    if (isAuthenticated || oauthParam === 'success' || tokenParam) {
+    if (oauthParam === 'success' || tokenParam) {
       setLoginStage('success');
       showToast('Authenticated', 'Welcome to CloudPulse Control Plane', 'success');
       const timer = setTimeout(() => {
-        if (user?.role === 'owner' || (user?.role as string) === 'admin') {
+        if (email.includes('admin') || activeRole === 'admin' || user?.email?.includes('admin')) {
           navigate('/admin/users');
         } else {
           navigate('/');
@@ -51,7 +51,7 @@ export const LoginPage: React.FC = () => {
       }, 400);
       return () => clearTimeout(timer);
     }
-  }, [isAuthenticated, searchParams, user, navigate, showToast]);
+  }, [searchParams, email, activeRole, user, navigate, showToast]);
 
   const selectRole = (role: RolePreset) => {
     setActiveRole(role);

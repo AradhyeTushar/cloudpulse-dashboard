@@ -203,13 +203,17 @@ func (s *ControlPlaneService) AuthorizeProxyRequest(ctx context.Context, req *Pr
 		clientIP := net.ParseIP(req.ClientIP)
 
 		for _, allowed := range matchedCred.IPWhitelist {
+			allowed = strings.TrimSpace(allowed)
+			if allowed == "" {
+				continue
+			}
 			if strings.Contains(allowed, "/") {
 				_, ipNet, err := net.ParseCIDR(allowed)
 				if err == nil && clientIP != nil && ipNet.Contains(clientIP) {
 					whitelisted = true
 					break
 				}
-			} else if allowed == req.ClientIP || allowed == "127.0.0.1" || allowed == "::1" {
+			} else if allowed == req.ClientIP {
 				whitelisted = true
 				break
 			}

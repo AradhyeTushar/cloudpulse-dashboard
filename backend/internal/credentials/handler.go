@@ -170,3 +170,34 @@ func (h *Handler) DeleteApiKey(w http.ResponseWriter, r *http.Request) {
 
 	response.Success(w, "API Key revoked and deleted", nil)
 }
+
+func (h *Handler) UpdateProxyCredential(w http.ResponseWriter, r *http.Request) {
+	claims, ok := r.Context().Value("claims").(*auth.Claims)
+	if !ok || claims == nil {
+		response.Unauthorized(w, "Authentication required")
+		return
+	}
+
+	id := chi.URLParam(r, "id")
+	if id == "" {
+		response.BadRequest(w, "Missing credential ID")
+		return
+	}
+
+	var req struct {
+		IPWhitelist []string `json:"ip_whitelist"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response.BadRequest(w, "Invalid JSON payload")
+		return
+	}
+
+	cred, err := h.service.UpdateProxyCredentialIPWhitelist(r.Context(), claims.UserID, id, req.IPWhitelist)
+	if err != nil {
+		response.InternalServerError(w, err.Error())
+		return
+	}
+
+	response.Success(w, "Proxy credential IP whitelist updated", cred)
+}
+

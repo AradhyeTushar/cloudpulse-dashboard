@@ -10,7 +10,8 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("credential record not found")
+	ErrNotFound     = errors.New("credential record not found")
+	ErrUnauthorized = errors.New("unauthorized access to credential")
 )
 
 type Repository interface {
@@ -118,12 +119,15 @@ func (r *postgresRepo) ListProxyCredentials(ctx context.Context, userID string) 
 }
 
 func (r *postgresRepo) UpdateProxyCredential(ctx context.Context, c *ProxyCredential) error {
+	if c.IPWhitelist == nil {
+		c.IPWhitelist = []string{}
+	}
 	query := `
 		UPDATE proxy_credentials 
-		SET username = $2, password_hash = $3, plain_password = $4, status = $5, updated_at = $6
+		SET username = $2, password_hash = $3, plain_password = $4, status = $5, ip_whitelist = $6, updated_at = $7
 		WHERE id = $1
 	`
-	_, err := r.pool.Exec(ctx, query, c.ID, c.Username, c.PasswordHash, c.PlainPassword, c.Status, time.Now())
+	_, err := r.pool.Exec(ctx, query, c.ID, c.Username, c.PasswordHash, c.PlainPassword, c.Status, c.IPWhitelist, time.Now())
 	return err
 }
 

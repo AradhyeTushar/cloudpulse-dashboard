@@ -1,15 +1,18 @@
 import React from 'react';
+import { ProxyStatus } from '../../types';
 
-export type StatusType = 'optimal' | 'moderate' | 'degraded' | 'active' | 'expiring' | 'terminated' | 'online' | 'offline';
+export type StatusType = ProxyStatus | 'optimal' | 'moderate' | 'degraded' | 'active' | 'expiring' | 'terminated' | 'online' | 'offline';
 
 interface ProxyStatusBadgeProps {
   status: StatusType | string;
   size?: 'sm' | 'md';
+  title?: string;
 }
 
-export const ProxyStatusBadge: React.FC<ProxyStatusBadgeProps> = ({ status, size = 'sm' }) => {
+export const ProxyStatusBadge: React.FC<ProxyStatusBadgeProps> = ({ status, size = 'sm', title }) => {
   const getColors = () => {
-    switch (status.toLowerCase()) {
+    const s = (status || '').toLowerCase().trim();
+    switch (s) {
       case 'optimal':
       case 'active':
       case 'online':
@@ -18,11 +21,17 @@ export const ProxyStatusBadge: React.FC<ProxyStatusBadgeProps> = ({ status, size
       case 'expiring':
       case 'warning':
         return { bg: 'rgba(245, 158, 11, 0.12)', text: '#f59e0b', dot: '#f59e0b' };
+      case 'traffic limit reached':
+        return { bg: 'rgba(239, 68, 68, 0.14)', text: '#ef4444', dot: '#ef4444' };
+      case 'expired':
+      case 'plan expired':
+        return { bg: 'rgba(239, 68, 68, 0.12)', text: '#ef4444', dot: '#ef4444' };
+      case 'disabled':
       case 'degraded':
       case 'terminated':
       case 'offline':
       case 'suspended':
-        return { bg: 'rgba(239, 68, 68, 0.12)', text: '#ef4444', dot: '#ef4444' };
+        return { bg: 'rgba(148, 163, 184, 0.18)', text: 'var(--text-secondary)', dot: '#94a3b8' };
       default:
         return { bg: 'rgba(92, 60, 246, 0.12)', text: 'var(--brand-primary)', dot: 'var(--brand-primary)' };
     }
@@ -32,6 +41,7 @@ export const ProxyStatusBadge: React.FC<ProxyStatusBadgeProps> = ({ status, size
 
   return (
     <span
+      title={title || status}
       style={{
         display: 'inline-flex',
         alignItems: 'center',
@@ -44,9 +54,10 @@ export const ProxyStatusBadge: React.FC<ProxyStatusBadgeProps> = ({ status, size
         color: colors.text,
         textTransform: 'uppercase',
         letterSpacing: '0.02em',
+        whiteSpace: 'nowrap',
       }}
     >
-      <span style={{ width: 5, height: 5, borderRadius: '50%', background: colors.dot }} />
+      <span style={{ width: 6, height: 6, borderRadius: '50%', background: colors.dot, flexShrink: 0 }} />
       {status}
     </span>
   );

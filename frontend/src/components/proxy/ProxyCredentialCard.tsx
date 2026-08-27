@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
-import { Copy, Check, Trash2, Eye, EyeOff, Terminal, Shield, Sparkles } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Copy, Check, Trash2, Eye, EyeOff, Terminal, AlertCircle, Clock, Activity, Shield } from 'lucide-react';
 import { ProxyEndpointConfig } from '../../types';
 import { ProxyStatusBadge } from './ProxyStatusBadge';
+import { formatTrafficBytes } from '../../config/proxyPlans';
 import { useToast } from '../../context/ToastContext';
+import { proxyService } from '../../services/proxyService';
 
 interface ProxyCredentialCardProps {
   endpoint: ProxyEndpointConfig;
@@ -18,6 +20,19 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
   const [copiedUri, setCopiedUri] = useState(false);
   const [copiedCurl, setCopiedCurl] = useState(false);
   const [useLocalHost, setUseLocalHost] = useState(true);
+  const [showIpEdit, setShowIpEdit] = useState(false);
+  const [ipInput, setIpInput] = useState((endpoint.ipWhitelist || []).join(', '));
+
+  useEffect(() => {
+    setIpInput((endpoint.ipWhitelist || []).join(', '));
+  }, [endpoint.ipWhitelist]);
+
+  const handleSaveIPWhitelist = () => {
+    const parsed = ipInput ? ipInput.split(',').map((s) => s.trim()).filter(Boolean) : [];
+    proxyService.updateEndpointIPWhitelist(endpoint.id, parsed);
+    setShowIpEdit(false);
+    showToast('IP Blocks Updated', `Updated IP whitelist for ${endpoint.name}.`, 'success');
+  };
 
   const activeHost = useLocalHost ? '127.0.0.1' : endpoint.host;
   const proxyUri = `http://${endpoint.username}:${endpoint.password}@${activeHost}:${endpoint.port}`;
@@ -37,6 +52,13 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
     setTimeout(() => setCopiedCurl(false), 2000);
   };
 
+  const usedBytes = endpoint.usedBytes || 0;
+  const limitBytes = endpoint.limitBytes || (endpoint.isFree ? 50 * 1024 * 1024 : 500 * 1024 * 1024);
+  const trafficPercent = limitBytes > 0 ? Math.min(100, Math.round((usedBytes / limitBytes) * 100)) : 0;
+  const status = endpoint.status || 'Active';
+
+  const isDisabledOrExpired = status !== 'Active';
+
   return (
     <div
       className="card"
@@ -46,6 +68,7 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
         flexDirection: 'column',
         justifyContent: 'space-between',
         gap: '1.1rem',
+        border: isDisabledOrExpired ? '1px solid rgba(239, 68, 68, 0.3)' : undefined,
       }}
     >
       <div>
@@ -59,8 +82,29 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
               Target: {endpoint.country} ({endpoint.countryCode})
             </div>
           </div>
-          <ProxyStatusBadge status="active" />
+          <ProxyStatusBadge status={status} title={endpoint.disabledReason} />
         </div>
+
+        {/* Status explanation alert if not active */}
+        {isDisabledOrExpired && endpoint.disabledReason && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              padding: '0.45rem 0.65rem',
+              background: 'rgba(239, 68, 68, 0.08)',
+              border: '1px solid rgba(239, 68, 68, 0.2)',
+              borderRadius: 'var(--radius-sm)',
+              fontSize: '0.75rem',
+              color: '#ef4444',
+              margin: '0.5rem 0',
+            }}
+          >
+            <AlertCircle size={13} style={{ flexShrink: 0 }} />
+            <span>{endpoint.disabledReason}</span>
+          </div>
+        )}
 
         {/* Badges */}
         <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap', margin: '0.65rem 0' }}>
@@ -89,7 +133,7 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
               textTransform: 'uppercase',
             }}
           >
-            HTTP CONNECT
+            {endpoint.protocol.toUpperCase()}
           </span>
           <span
             style={{
@@ -103,6 +147,42 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
           >
             {endpoint.rotationMode === 'sticky' ? `Sticky (${endpoint.sessionDurationMin}m)` : 'Rotating'}
           </span>
+          {endpoint.isFree && (
+            <span
+              style={{
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                padding: '0.18rem 0.5rem',
+                borderRadius: 'var(--radius-sm)',
+                background: 'rgba(16, 185, 129, 0.12)',
+                color: '#10b981',
+              }}
+            >
+              Free Plan (12h)
+            </span>
+          )}
+        </div>
+
+        {/* Traffic Progress Bar */}
+        <div style={{ margin: '0.65rem 0', fontSize: '0.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem', color: 'var(--text-secondary)' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>
+              <Activity size={12} /> Traffic Used:
+            </span>
+            <span style={{ fontWeight: 600, color: trafficPercent >= 100 ? '#ef4444' : 'var(--text-primary)' }}>
+              {formatTrafficBytes(usedBytes)} / {formatTrafficBytes(limitBytes)} ({trafficPercent}%)
+            </span>
+          </div>
+          <div style={{ width: '100%', height: '5px', background: 'var(--bg-subtle)', borderRadius: '3px', overflow: 'hidden' }}>
+            <div
+              style={{
+                width: `${trafficPercent}%`,
+                height: '100%',
+                background: trafficPercent >= 100 ? '#ef4444' : trafficPercent > 80 ? '#f59e0b' : 'var(--brand-primary)',
+                transition: 'width 0.3s ease',
+              }}
+            />
+          </div>
         </div>
 
         {/* Host Selector Toggle */}
@@ -181,6 +261,96 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
               </button>
             </div>
           </div>
+        </div>
+
+        {/* IP Whitelist / IP Blocks Section */}
+        <div style={{ marginTop: '0.65rem', padding: '0.65rem', background: 'var(--bg-subtle)', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border-color)', fontSize: '0.75rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: showIpEdit ? '0.5rem' : '0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+              <Shield size={12} color="var(--brand-primary)" />
+              <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>IP Whitelist / Blocks:</span>
+              {(!endpoint.ipWhitelist || endpoint.ipWhitelist.length === 0) ? (
+                <span style={{ color: '#10b981', fontWeight: 600 }}>All Client IPs Allowed</span>
+              ) : (
+                <span style={{ color: 'var(--brand-primary)', fontWeight: 600 }}>
+                  {endpoint.ipWhitelist.length} rule{endpoint.ipWhitelist.length > 1 ? 's' : ''} ({endpoint.ipWhitelist.slice(0, 2).join(', ')}{endpoint.ipWhitelist.length > 2 ? '...' : ''})
+                </span>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowIpEdit(!showIpEdit)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: 'var(--brand-primary)',
+                fontWeight: 700,
+                fontSize: '0.725rem',
+                cursor: 'pointer',
+                padding: '0.1rem 0.35rem',
+              }}
+            >
+              {showIpEdit ? 'Cancel' : 'Edit IP Blocks'}
+            </button>
+          </div>
+
+          {showIpEdit && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.4rem' }}>
+              <input
+                type="text"
+                value={ipInput}
+                onChange={(e) => setIpInput(e.target.value)}
+                placeholder="e.g. 110.227.184.49, 192.168.1.0/24"
+                style={{
+                  padding: '0.35rem 0.55rem',
+                  fontSize: '0.75rem',
+                  borderRadius: '4px',
+                  border: '1px solid var(--border-color)',
+                  background: 'var(--bg-surface)',
+                  color: 'var(--text-primary)',
+                }}
+              />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const myIp = '110.227.184.49';
+                    const cur = ipInput ? ipInput.split(',').map((s) => s.trim()).filter(Boolean) : [];
+                    if (!cur.includes(myIp)) {
+                      setIpInput([...cur, myIp].join(', '));
+                    }
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: 'none',
+                    color: 'var(--brand-primary)',
+                    fontSize: '0.7rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    padding: 0,
+                  }}
+                >
+                  + Add My IP (110.227.184.49)
+                </button>
+                <button
+                  type="button"
+                  onClick={handleSaveIPWhitelist}
+                  style={{
+                    background: 'var(--brand-primary)',
+                    color: '#fff',
+                    border: 'none',
+                    fontSize: '0.725rem',
+                    fontWeight: 700,
+                    padding: '0.25rem 0.65rem',
+                    borderRadius: '4px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Save IP Blocks
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

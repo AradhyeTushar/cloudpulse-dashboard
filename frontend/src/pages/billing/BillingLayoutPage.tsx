@@ -1,14 +1,15 @@
 import React from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { Layers, CreditCard, Receipt, ShieldCheck } from 'lucide-react';
+import { useSearchParams, useNavigate } from 'react-router-dom';
+import { Crown, History, CreditCard, Sparkles, Layers } from 'lucide-react';
 import { SubscriptionsView } from '../../components/billing/SubscriptionsView';
 import { PaymentHistoryView } from '../../components/billing/PaymentHistoryView';
 import { PaymentMethodsView } from '../../components/billing/PaymentMethodsView';
 
-type BillingTab = 'subscriptions' | 'methods' | 'history';
+type BillingTab = 'subscriptions' | 'history' | 'methods';
 
 export const BillingLayoutPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const activeTab = (searchParams.get('tab') as BillingTab) || 'subscriptions';
 
   const setTab = (tab: BillingTab) => {
@@ -16,8 +17,8 @@ export const BillingLayoutPage: React.FC = () => {
   };
 
   return (
-    <div style={{ width: '100%', maxWidth: '1280px', margin: '0 auto' }}>
-      {/* Top Billing Navigation Header */}
+    <div style={{ width: '100%', maxWidth: '1280px', margin: '0 auto', padding: '0.25rem 0 2rem' }}>
+      {/* Top Clean Billing Tab Switcher */}
       <div
         style={{
           display: 'flex',
@@ -25,103 +26,109 @@ export const BillingLayoutPage: React.FC = () => {
           justifyContent: 'space-between',
           flexWrap: 'wrap',
           gap: '1rem',
-          marginBottom: '1.75rem',
-          paddingBottom: '1.25rem',
+          marginBottom: '1.5rem',
           borderBottom: '1px solid var(--border-color)',
+          paddingBottom: '0.75rem',
         }}
       >
-        <div>
-          <h1 style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--text-primary)', margin: 0, letterSpacing: '-0.02em' }}>
-            Billing & Payment Center
-          </h1>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', marginTop: '0.35rem', marginBottom: 0 }}>
-            Manage active proxy subscriptions, PayPal/Razorpay gateways, auto-renewals, and invoices.
-          </p>
-        </div>
-
-        {/* Unified Tab Pill Switcher */}
-        <div
-          style={{
-            display: 'inline-flex',
-            background: 'var(--bg-card)',
-            padding: '4px',
-            borderRadius: '12px',
-            border: '1px solid var(--border-color)',
-            gap: '4px',
-          }}
-        >
+        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
           <button
             type="button"
             onClick={() => setTab('subscriptions')}
             style={{
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
               gap: '0.5rem',
-              padding: '0.6rem 1rem',
+              padding: '0.5rem 1rem',
               borderRadius: '8px',
               border: 'none',
-              background: activeTab === 'subscriptions' ? 'var(--brand-primary)' : 'transparent',
-              color: activeTab === 'subscriptions' ? '#ffffff' : 'var(--text-secondary)',
-              fontWeight: 700,
-              fontSize: '0.85rem',
+              background: activeTab === 'subscriptions' ? 'var(--bg-surface-hover)' : 'transparent',
+              color: activeTab === 'subscriptions' ? 'var(--text-primary)' : 'var(--text-secondary)',
+              fontWeight: activeTab === 'subscriptions' ? 700 : 500,
+              fontSize: '0.875rem',
               cursor: 'pointer',
-              transition: 'all 0.2s ease',
+              transition: 'background 0.15s ease',
             }}
           >
-            <Layers size={15} />
+            <Crown size={16} color={activeTab === 'subscriptions' ? 'var(--brand-primary)' : 'currentColor'} />
             <span>Subscriptions</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setTab('methods')}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '0.5rem',
-              padding: '0.6rem 1rem',
-              borderRadius: '8px',
-              border: 'none',
-              background: activeTab === 'methods' ? 'var(--brand-primary)' : 'transparent',
-              color: activeTab === 'methods' ? '#ffffff' : 'var(--text-secondary)',
-              fontWeight: 700,
-              fontSize: '0.85rem',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-            }}
-          >
-            <CreditCard size={15} />
-            <span>Payment Methods</span>
           </button>
 
           <button
             type="button"
             onClick={() => setTab('history')}
             style={{
-              display: 'flex',
+              display: 'inline-flex',
               alignItems: 'center',
               gap: '0.5rem',
-              padding: '0.6rem 1rem',
+              padding: '0.5rem 1rem',
               borderRadius: '8px',
               border: 'none',
-              background: activeTab === 'history' ? 'var(--brand-primary)' : 'transparent',
-              color: activeTab === 'history' ? '#ffffff' : 'var(--text-secondary)',
-              fontWeight: 700,
-              fontSize: '0.85rem',
+              background: activeTab === 'history' ? 'var(--bg-surface-hover)' : 'transparent',
+              color: activeTab === 'history' ? 'var(--text-primary)' : 'var(--text-secondary)',
+              fontWeight: activeTab === 'history' ? 700 : 500,
+              fontSize: '0.875rem',
               cursor: 'pointer',
-              transition: 'all 0.2s ease',
+              transition: 'background 0.15s ease',
             }}
           >
-            <Receipt size={15} />
-            <span>Invoices & History</span>
+            <History size={16} color={activeTab === 'history' ? 'var(--brand-primary)' : 'currentColor'} />
+            <span>Payment history</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setTab('methods')}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.5rem',
+              padding: '0.5rem 1rem',
+              borderRadius: '8px',
+              border: 'none',
+              background: activeTab === 'methods' ? 'var(--bg-surface-hover)' : 'transparent',
+              color: activeTab === 'methods' ? 'var(--text-primary)' : 'var(--text-secondary)',
+              fontWeight: activeTab === 'methods' ? 700 : 500,
+              fontSize: '0.875rem',
+              cursor: 'pointer',
+              transition: 'background 0.15s ease',
+            }}
+          >
+            <CreditCard size={16} color={activeTab === 'methods' ? 'var(--brand-primary)' : 'currentColor'} />
+            <span>Payment methods</span>
           </button>
         </div>
+
+        {/* Dedicated Plans Page Button */}
+        <button
+          type="button"
+          onClick={() => navigate('/plans')}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '0.45rem',
+            padding: '0.45rem 1rem',
+            borderRadius: '8px',
+            background: 'rgba(92, 60, 246, 0.1)',
+            color: 'var(--brand-primary)',
+            border: '1px solid rgba(92, 60, 246, 0.25)',
+            fontSize: '0.8125rem',
+            fontWeight: 700,
+            cursor: 'pointer',
+            transition: 'all 0.2s ease',
+          }}
+        >
+          <Layers size={14} />
+          <span>View All Proxy Plans</span>
+        </button>
       </div>
 
-      {/* Render Active View */}
-      {activeTab === 'subscriptions' && <SubscriptionsView />}
-      {activeTab === 'methods' && <PaymentMethodsView />}
-      {activeTab === 'history' && <PaymentHistoryView />}
+      {/* Main Billing Active View */}
+      <div>
+        {activeTab === 'subscriptions' && <SubscriptionsView />}
+        {activeTab === 'history' && <PaymentHistoryView />}
+        {activeTab === 'methods' && <PaymentMethodsView />}
+      </div>
     </div>
   );
 };

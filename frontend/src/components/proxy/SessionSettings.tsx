@@ -97,25 +97,45 @@ export const SessionSettings: React.FC<SessionSettingsProps> = ({
 
       {/* IP Whitelist */}
       <div>
-        <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 600, marginBottom: '0.4rem' }}>
-          Authorized Client IP Whitelist (Optional)
-        </label>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+          <label style={{ fontSize: '0.8125rem', fontWeight: 600 }}>
+            Authorized Client IP Whitelist / IP Blocks
+          </label>
+          <button
+            type="button"
+            onClick={() => {
+              const myIp = '110.227.184.49';
+              if (!ipWhitelist.includes(myIp)) {
+                onChangeWhitelist([...ipWhitelist, myIp]);
+              }
+            }}
+            style={{
+              background: 'rgba(92, 60, 246, 0.1)',
+              border: 'none',
+              color: 'var(--brand-primary)',
+              fontSize: '0.725rem',
+              fontWeight: 700,
+              padding: '0.2rem 0.5rem',
+              borderRadius: '4px',
+              cursor: 'pointer',
+            }}
+          >
+            + Use My IP (110.227.184.49)
+          </button>
+        </div>
         <input
           type="text"
           className="input-field"
-          placeholder="Comma-separated e.g. 192.168.1.1, 10.0.0.1/24"
+          placeholder="Comma-separated e.g. 110.227.184.49, 192.168.1.0/24, 10.0.0.0/8"
           value={ipWhitelist.join(', ')}
-          onChange={(e) =>
-            onChangeWhitelist(
-              e.target.value
-                .split(',')
-                .map((s) => s.trim())
-                .filter(Boolean)
-            )
-          }
+          onChange={(e) => {
+            const raw = e.target.value;
+            const parsed = raw.split(',').map((s) => s.trim()).filter(Boolean);
+            onChangeWhitelist(parsed);
+          }}
         />
         <span style={{ fontSize: '0.725rem', color: 'var(--text-muted)', marginTop: '0.25rem', display: 'block' }}>
-          Leave blank to allow any client with valid user/pass authentication.
+          Supports individual IPv4/IPv6 addresses and CIDR IP blocks (e.g. <code>/24</code>, <code>/16</code>). Leave blank to allow any client.
         </span>
       </div>
     </div>

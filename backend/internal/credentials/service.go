@@ -261,3 +261,23 @@ func (s *Service) ValidateSecret(ctx context.Context, plainTextSecret string) (*
 	secretHash := HashSecret(plainTextSecret)
 	return s.repo.GetApiKeyByHash(ctx, secretHash)
 }
+
+func (s *Service) UpdateProxyCredentialIPWhitelist(ctx context.Context, userID, id string, ipWhitelist []string) (*ProxyCredential, error) {
+	cred, err := s.repo.GetProxyCredentialByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if userID != "" && cred.UserID != userID {
+		return nil, ErrUnauthorized
+	}
+	if ipWhitelist == nil {
+		ipWhitelist = []string{}
+	}
+	cred.IPWhitelist = ipWhitelist
+	cred.UpdatedAt = time.Now()
+	if err := s.repo.UpdateProxyCredential(ctx, cred); err != nil {
+		return nil, err
+	}
+	return cred, nil
+}
+

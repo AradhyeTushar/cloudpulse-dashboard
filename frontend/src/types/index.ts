@@ -81,6 +81,7 @@ export interface SnapshotItem {
 export type ProxyType = 'residential' | 'datacenter' | 'mobile' | 'isp';
 export type ProxyProtocol = 'http' | 'https' | 'socks5';
 export type ProxyRotationMode = 'sticky' | 'rotating';
+export type ProxyStatus = 'Active' | 'Disabled' | 'Expired' | 'Traffic Limit Reached' | 'Plan Expired';
 
 export interface ProxyEndpointConfig {
   id: string;
@@ -99,6 +100,61 @@ export interface ProxyEndpointConfig {
   city?: string;
   ipWhitelist: string[];
   createdAt: string;
+  // Plan & Status tracking fields
+  status?: ProxyStatus;
+  disabledReason?: string;
+  usedBytes?: number;
+  limitBytes?: number;
+  expiresAt?: string;
+  isFree?: boolean;
+  planId?: string;
+}
+
+export interface UserProxySubscription {
+  id: string;
+  planId: string;
+  planSlug: string;
+  status: 'active' | 'expired' | 'canceled';
+  startedAt: string;
+  expiresAt: string;
+  autoRenew: boolean;
+  paymentMethod?: string;
+  lastDailyReset?: string;
+}
+
+export interface ProxyUsageDashboardSummary {
+  plan: {
+    id: string;
+    slug: string;
+    name: string;
+    priceUSD: number;
+    priceDisplay: string;
+    isFree: boolean;
+    expiresAt: string;
+    renewalDisplay: string;
+    status: 'Active' | 'Expired';
+    validityDisplay: string;
+  };
+  proxyUsage: {
+    used: number;
+    max: number;
+    available: number;
+    activeCount: number;
+    disabledCount: number;
+    expiredCount: number;
+    usagePercent: number;
+  };
+  trafficUsage: {
+    usedMB: number;
+    limitMB: number;
+    remainingMB: number;
+    usagePercent: number;
+    usedDisplay: string;
+    remainingDisplay: string;
+    limitDisplay: string;
+    resetInfo: string;
+    scope: 'per_proxy' | 'daily' | 'total_period';
+  };
 }
 
 export interface ProxyLocationNode {

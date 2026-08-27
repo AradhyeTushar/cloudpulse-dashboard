@@ -1,21 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
-import { Layers, Zap, Plus, Copy, Check, Terminal, Code2, Globe, Shield, ArrowRight } from 'lucide-react';
+import { Plus, Copy, Check, ArrowRight } from 'lucide-react';
 import { proxyService } from '../../services/proxyService';
-import { BandwidthCard } from '../../components/proxy/BandwidthCard';
-import { ConnectionLimitCard } from '../../components/proxy/ConnectionLimitCard';
+import { ProxyUsageDashboard } from '../../components/proxy/ProxyUsageDashboard';
+import { PlanUpgradeModal } from '../../components/proxy/PlanUpgradeModal';
 import { ProxyEndpointCard } from '../../components/proxy/ProxyEndpointCard';
 import { ProxyCredentialCard } from '../../components/proxy/ProxyCredentialCard';
+import { ProxyPlanConfig } from '../../config/proxyPlans';
 import { useToast } from '../../context/ToastContext';
 import { Button } from '../../components/ui/Button';
 
 export const ProxyDashboardPage: React.FC = () => {
   const { showToast } = useToast();
   const [endpoints, setEndpoints] = useState(() => proxyService.getEndpoints());
+  const [dashboardSummary, setDashboardSummary] = useState(() => proxyService.getDashboardUsageSummary());
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [activeTab, setActiveTab] = useState<'curl' | 'python' | 'node' | 'go'>('python');
   const [copiedCode, setCopiedCode] = useState(false);
 
-  const usage = proxyService.getUsageStats();
+  const refreshState = () => {
+    setEndpoints(proxyService.getEndpoints());
+    setDashboardSummary(proxyService.getDashboardUsageSummary());
+  };
+
+  useEffect(() => {
+    const handlePlanUpdate = () => {
+      refreshState();
+    };
+    window.addEventListener('cloudpulse_plan_updated', handlePlanUpdate);
+    window.addEventListener('proxy_plan_updated', handlePlanUpdate);
+    return () => {
+      window.removeEventListener('cloudpulse_plan_updated', handlePlanUpdate);
+      window.removeEventListener('proxy_plan_updated', handlePlanUpdate);
+    };
+  }, []);
+
+  const handleSelectPlan = (plan: ProxyPlanConfig) => {
+    proxyService.upgradePlan(plan.id);
+    refreshState();
+    setShowUpgradeModal(false);
+    showToast('Plan Updated', `Successfully activated the ${plan.name} plan! Valid for ${plan.validityDisplay}.`, 'success');
+  };
+
+  const handleRenewPlan = () => {
+    proxyService.renewPlan();
+    refreshState();
+    showToast('Subscription Renewed', 'Your plan has been extended by 28 days.', 'success');
+  };
 
   const codeSnippets = {
     python: `import requests
@@ -66,7 +97,7 @@ func main() {
 
   const handleDeleteEndpoint = (id: string, name: string) => {
     proxyService.deleteEndpoint(id);
-    setEndpoints(proxyService.getEndpoints());
+    refreshState();
     showToast('Endpoint Deleted', `Deleted ${name}`, 'info');
   };
 
@@ -83,26 +114,25 @@ func main() {
           </p>
         </div>
 
-        <NavLink to="/proxy/credentials">
-          <Button variant="primary">
-            <Plus size={15} style={{ marginRight: '0.4rem' }} />
-            Create Credentials
+        <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <Button variant="secondary" onClick={() => setShowUpgradeModal(true)}>
+            View Plans
           </Button>
-        </NavLink>
+          <NavLink to="/proxy/credentials">
+            <Button variant="primary">
+              <Plus size={15} style={{ marginRight: '0.4rem' }} />
+              Create Credentials
+            </Button>
+          </NavLink>
+        </div>
       </div>
 
-      {/* Top Metrics Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '1.25rem', marginBottom: '2rem' }}>
-        <BandwidthCard
-          usedGB={usage.totalGBUsed}
-          totalLimitGB={usage.totalGBLimit}
-          remainingGB={usage.remainingGB}
-        />
-        <ConnectionLimitCard
-          activeStreams={usage.activeConcurrentStreams}
-          maxThreads={5000}
-        />
-      </div>
+      {/* Primary Usage Dashboard Section */}
+      <ProxyUsageDashboard
+        summary={dashboardSummary}
+        onOpenUpgradeModal={() => setShowUpgradeModal(true)}
+        onRenewPlan={handleRenewPlan}
+      />
 
       {/* Available Proxy Networks */}
       <div style={{ marginBottom: '2rem' }}>
@@ -154,7 +184,7 @@ func main() {
           </div>
 
           {/* Language Tabs */}
-          <div style={{ display: 'flex', gap: '0.35rem', background: 'var(--bg-subtle)', padding: '0.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--bg-border)' }}>
+          <div style={{ display: 'flex', gap: '0.35rem', background: 'var(--bg-subtle)', padding: '0.25rem', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-color)' }}>
             {(['python', 'curl', 'node', 'go'] as const).map((lang) => (
               <button
                 key={lang}
@@ -235,6 +265,15 @@ func main() {
           ))}
         </div>
       </div>
+
+      {/* Plan Upgrade / Matrix Modal */}
+      {showUpgradeModal && (
+        <PlanUpgradeModal
+          currentPlanId={dashboardSummary.plan.id}
+          onClose={() => setShowUpgradeModal(false)}
+          onSelectPlan={handleSelectPlan}
+        />
+      )}
     </div>
   );
 };

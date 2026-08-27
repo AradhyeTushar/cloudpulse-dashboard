@@ -86,11 +86,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (res.ok) {
           const data = await res.json();
           if (data?.user) {
+            const isAdmin = data.user.email?.includes('admin');
             const authUser: AuthUser = {
               id: data.user.id,
               name: data.user.name,
               email: data.user.email,
-              role: data.user.role || 'owner',
+              role: isAdmin ? 'owner' : 'user',
               workspaceName: `${data.user.name}'s Workspace`,
               status: 'active',
               assignedPlan: 'pro-500gb',
@@ -123,11 +124,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const data = await res.json();
         const jwtToken = data.token || data.session?.token;
         const apiUser = data.user;
+        const isAdmin = email.includes('admin') || apiUser.email?.includes('admin');
         const authUser: AuthUser = {
           id: apiUser.id,
           name: apiUser.name,
           email: apiUser.email,
-          role: apiUser.role || (email.includes('admin') ? 'owner' : 'user'),
+          role: isAdmin ? 'owner' : 'user',
           workspaceName: `${apiUser.name}'s Workspace`,
           status: 'active',
           assignedPlan: 'pro-500gb',
@@ -154,11 +156,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const json = await res.json();
         const jwtToken = json.data?.token;
         const apiUser = json.data?.user;
+        const isAdmin = email.includes('admin') || apiUser.email?.includes('admin');
         const authUser: AuthUser = {
           id: apiUser.id,
           name: apiUser.name,
           email: apiUser.email,
-          role: apiUser.role || 'owner',
+          role: isAdmin ? 'owner' : 'user',
           workspaceName: apiUser.workspace_name || `${apiUser.name}'s Workspace`,
           status: apiUser.status || 'active',
           assignedPlan: 'pro-500gb',
