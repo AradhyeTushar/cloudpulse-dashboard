@@ -174,36 +174,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return true;
       }
     } catch {
-      // Fallback to pre-seeded enterprise accounts
+      // Network failure
     }
 
-    // 3. Fallback for pre-seeded accounts & quick login
-    if (
-      email === 'alex.mercer@cloudinfra.io' ||
-      email === 'admin.operator@cloudpulse.io' ||
-      email === 'validator@enterprise.com' ||
-      pass.length >= 6
-    ) {
-      const isAdm = email.includes('admin');
-      const isVal = email.includes('validator');
-      const fallbackUser: AuthUser = {
-        id: isAdm ? 'usr_admin_operator' : isVal ? 'usr_validator_enterprise' : 'usr_customer_alex',
-        name: isAdm ? 'CloudPulse Operator' : isVal ? 'Enterprise Validator' : 'Alex Mercer',
-        email: email,
-        role: isAdm ? 'owner' : 'user',
-        workspaceName: isAdm ? 'CloudPulse Core Ops' : 'Production Grid',
-        status: 'active',
-        assignedPlan: 'pro-500gb',
-      };
-      const mockToken = `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.cloudpulse_session_${Date.now()}`;
-      setUser(fallbackUser);
-      setToken(mockToken);
-      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(fallbackUser));
-      localStorage.setItem(AUTH_TOKEN_KEY, mockToken);
-      setIsLoading(false);
-      return true;
-    }
-
+    // If database rejects credentials or user does not exist, reject login
     setIsLoading(false);
     return false;
   };
