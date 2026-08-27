@@ -16,6 +16,7 @@ import { ProxyEndpointConfig, ProxyType, ProxyProtocol, ProxyRotationMode } from
 import { useToast } from '../../context/ToastContext';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
+import { copyToClipboard } from '../../utils/clipboard';
 
 export const ProxyAccessPage: React.FC = () => {
   const { showToast } = useToast();
@@ -67,8 +68,8 @@ export const ProxyAccessPage: React.FC = () => {
     showToast('Endpoint Deleted', `Proxy endpoint ${epName} has been removed.`, 'info');
   };
 
-  const copyString = (text: string, id: string) => {
-    navigator.clipboard.writeText(text);
+  const copyString = async (text: string, id: string) => {
+    await copyToClipboard(text);
     setCopiedId(id);
     showToast('Copied', 'Connection string copied to clipboard.', 'success');
     setTimeout(() => setCopiedId(null), 2000);
@@ -256,12 +257,7 @@ export const ProxyAccessPage: React.FC = () => {
                   Target Country
                 </label>
                 <select className="input-field" value={country} onChange={(e) => setCountry(e.target.value)}>
-                  <option value="India">India (IN) - Mumbai / Delhi</option>
-                  <option value="United States">United States (US)</option>
-                  <option value="Germany">Germany (DE)</option>
-                  <option value="United Kingdom">United Kingdom (GB)</option>
-                  <option value="Japan">Japan (JP)</option>
-                  <option value="Singapore">Singapore (SG)</option>
+                  <option value="India">India (IN) - Mumbai / Delhi / Bengaluru (12ms)</option>
                 </select>
               </div>
             </div>

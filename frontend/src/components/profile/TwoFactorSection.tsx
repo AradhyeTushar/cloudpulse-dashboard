@@ -14,6 +14,7 @@ import {
 import { Button } from '../ui/Button';
 import { Modal } from '../ui/Modal';
 import { useToast } from '../../context/ToastContext';
+import { copyToClipboard } from '../../utils/clipboard';
 
 export const TwoFactorSection: React.FC = () => {
   const { showToast } = useToast();
@@ -34,8 +35,8 @@ export const TwoFactorSection: React.FC = () => {
     '62B6-33E1',
   ];
 
-  const handleCopyKey = () => {
-    navigator.clipboard.writeText(secretKey);
+  const handleCopyKey = async () => {
+    await copyToClipboard(secretKey);
     setCopiedKey(true);
     showToast('Secret Copied', 'Secret setup key copied.', 'info');
     setTimeout(() => setCopiedKey(false), 2000);

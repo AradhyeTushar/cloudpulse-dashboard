@@ -633,6 +633,7 @@ export const ProxyCredentialsPage: React.FC = () => {
               </label>
               <LocationSelector
                 selectedCountryCode={targetCountryCode}
+                selectedCountry={targetCountry}
                 onSelect={(country, code) => {
                   setTargetCountry(country);
                   setTargetCountryCode(code);

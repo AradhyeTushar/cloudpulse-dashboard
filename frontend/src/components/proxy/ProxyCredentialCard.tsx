@@ -5,6 +5,7 @@ import { ProxyStatusBadge } from './ProxyStatusBadge';
 import { formatTrafficBytes } from '../../config/proxyPlans';
 import { useToast } from '../../context/ToastContext';
 import { proxyService } from '../../services/proxyService';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface ProxyCredentialCardProps {
   endpoint: ProxyEndpointConfig;
@@ -38,15 +39,15 @@ export const ProxyCredentialCard: React.FC<ProxyCredentialCardProps> = ({
   const proxyUri = `http://${endpoint.username}:${endpoint.password}@${activeHost}:${endpoint.port}`;
   const curlCommand = `curl -x "http://${endpoint.username}:${endpoint.password}@${activeHost}:${endpoint.port}" https://api.ipify.org`;
 
-  const copyUri = () => {
-    navigator.clipboard.writeText(proxyUri);
+  const copyUri = async () => {
+    await copyToClipboard(proxyUri);
     setCopiedUri(true);
     showToast('Copied Proxy URI', `Copied: ${proxyUri}`, 'success');
     setTimeout(() => setCopiedUri(false), 2000);
   };
 
-  const copyCurl = () => {
-    navigator.clipboard.writeText(curlCommand);
+  const copyCurl = async () => {
+    await copyToClipboard(curlCommand);
     setCopiedCurl(true);
     showToast('Copied cURL Command', 'Paste into terminal to test instantly.', 'success');
     setTimeout(() => setCopiedCurl(false), 2000);

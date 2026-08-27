@@ -14,6 +14,7 @@ import { StatusBadge } from '../ui/Badge';
 import { Button } from '../ui/Button';
 import { Dropdown } from '../ui/Dropdown';
 import { useToast } from '../../context/ToastContext';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface VpsTableProps {
   vpsList: VpsInstance[];
@@ -52,9 +53,9 @@ export const VpsTable: React.FC<VpsTableProps> = ({
     }));
   };
 
-  const handleCopyIp = (ip: string, id: string, e: React.MouseEvent) => {
+  const handleCopyIp = async (ip: string, id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    navigator.clipboard.writeText(ip);
+    await copyToClipboard(ip);
     setCopiedId(id);
     showToast('IP Copied', `${ip} copied to clipboard.`, 'success');
     setTimeout(() => setCopiedId(null), 2000);

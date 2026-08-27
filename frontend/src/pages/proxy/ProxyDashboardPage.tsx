@@ -9,6 +9,7 @@ import { ProxyCredentialCard } from '../../components/proxy/ProxyCredentialCard'
 import { ProxyPlanConfig } from '../../config/proxyPlans';
 import { useToast } from '../../context/ToastContext';
 import { Button } from '../../components/ui/Button';
+import { copyToClipboard } from '../../utils/clipboard';
 
 export const ProxyDashboardPage: React.FC = () => {
   const { showToast } = useToast();
@@ -92,11 +93,15 @@ func main() {
 }`,
   };
 
-  const copyCode = () => {
-    navigator.clipboard.writeText(codeSnippets[activeTab]);
-    setCopiedCode(true);
-    showToast('Code Copied', 'Integration snippet copied to clipboard.', 'success');
-    setTimeout(() => setCopiedCode(false), 2000);
+  const copyCode = async () => {
+    const ok = await copyToClipboard(codeSnippets[activeTab]);
+    if (ok) {
+      setCopiedCode(true);
+      showToast('Code Copied', 'Integration snippet copied to clipboard.', 'success');
+      setTimeout(() => setCopiedCode(false), 2000);
+    } else {
+      showToast('Copy Note', 'Snippet selected. Press Ctrl+C to copy.', 'info');
+    }
   };
 
   const handleDeleteEndpoint = (id: string, name: string) => {

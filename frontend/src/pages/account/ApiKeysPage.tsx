@@ -3,6 +3,7 @@ import { Key, Plus, Trash2, Copy, Check } from 'lucide-react';
 import { useToast } from '../../context/ToastContext';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
+import { copyToClipboard } from '../../utils/clipboard';
 
 interface ApiKeyItem {
   id: string;
@@ -57,9 +58,9 @@ export const ApiKeysPage: React.FC = () => {
     setKeyName('');
   };
 
-  const copySecret = () => {
+  const copySecret = async () => {
     if (generatedSecret) {
-      navigator.clipboard.writeText(generatedSecret);
+      await copyToClipboard(generatedSecret);
       showToast('Key Copied', 'API secret copied to clipboard.', 'success');
     }
   };

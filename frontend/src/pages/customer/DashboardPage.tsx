@@ -17,6 +17,7 @@ import {
 import { proxyService } from '../../services/proxyService';
 import { useToast } from '../../context/ToastContext';
 import { Button } from '../../components/ui/Button';
+import { copyToClipboard } from '../../utils/clipboard';
 
 export const DashboardPage: React.FC = () => {
   const { showToast } = useToast();
@@ -69,8 +70,8 @@ func main() {
 }`,
   };
 
-  const copyCode = () => {
-    navigator.clipboard.writeText(codeSnippets[activeTab]);
+  const copyCode = async () => {
+    await copyToClipboard(codeSnippets[activeTab]);
     setCopied(true);
     showToast('Code Copied', 'Integration snippet copied to clipboard.', 'success');
     setTimeout(() => setCopied(false), 2000);
