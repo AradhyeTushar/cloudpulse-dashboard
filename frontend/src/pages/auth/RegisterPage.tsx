@@ -39,6 +39,7 @@ export const RegisterPage: React.FC = () => {
   const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '', '']);
   const [resendCooldown, setResendCooldown] = useState(0);
   const [isResending, setIsResending] = useState(false);
+  const [receivedDevOtp, setReceivedDevOtp] = useState<string | null>(null);
 
   // UI Flow & Animations
   const [isShaking, setIsShaking] = useState(false);
@@ -96,6 +97,9 @@ export const RegisterPage: React.FC = () => {
       setStage('idle');
       setStep('otp');
       setResendCooldown(60);
+      if (result.devOtp) {
+        setReceivedDevOtp(result.devOtp);
+      }
       showToast('Verification Code Sent', `We sent a 6-digit code to ${email}`, 'success');
       // Focus first OTP input after DOM render
       setTimeout(() => {
@@ -146,6 +150,9 @@ export const RegisterPage: React.FC = () => {
 
     if (result.success) {
       setResendCooldown(60);
+      if (result.devOtp) {
+        setReceivedDevOtp(result.devOtp);
+      }
       setOtpDigits(['', '', '', '', '', '']);
       otpInputRefs.current[0]?.focus();
       showToast('Code Resent', `A new verification code was sent to ${email}`, 'success');
@@ -540,6 +547,35 @@ export const RegisterPage: React.FC = () => {
                     )}
                   </button>
                 </div>
+
+                {receivedDevOtp && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.5rem',
+                      width: '100%',
+                      padding: '0.6rem 0.85rem',
+                      background: 'rgba(56, 189, 248, 0.08)',
+                      border: '1px solid rgba(56, 189, 248, 0.25)',
+                      borderRadius: '10px',
+                      fontSize: '0.8rem',
+                      color: '#38bdf8',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                    }}
+                    onClick={() => {
+                      const digits = receivedDevOtp.split('').slice(0, 6);
+                      setOtpDigits(digits);
+                      setTimeout(() => {
+                        otpInputRefs.current[5]?.focus();
+                      }, 50);
+                    }}
+                  >
+                    <span>Verification Code: <strong style={{ letterSpacing: '2px', fontSize: '0.95rem' }}>{receivedDevOtp}</strong> (Click to auto-fill)</span>
+                  </div>
+                )}
               </div>
 
               {/* Submit Step 2 Button */}

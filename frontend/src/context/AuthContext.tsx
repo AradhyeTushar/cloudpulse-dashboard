@@ -19,7 +19,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, pass: string) => Promise<boolean>;
   register: (name: string, email: string, pass: string) => Promise<boolean>;
-  sendRegistrationOTP: (name: string, email: string, pass: string, confirmPass?: string) => Promise<{ success: boolean; message?: string }>;
+  sendRegistrationOTP: (name: string, email: string, pass: string, confirmPass?: string) => Promise<{ success: boolean; message?: string; devOtp?: string }>;
   verifyRegistrationOTP: (email: string, otp: string) => Promise<{ success: boolean; message?: string }>;
   loginWithGoogle: () => Promise<boolean>;
   logout: () => Promise<void>;
@@ -258,7 +258,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     email: string,
     pass: string,
     confirmPass?: string
-  ): Promise<{ success: boolean; message?: string }> => {
+  ): Promise<{ success: boolean; message?: string; devOtp?: string }> => {
     setIsLoading(true);
     try {
       let res = await fetch('/api/v1/auth/register/send-otp', {
@@ -289,7 +289,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setIsLoading(false);
 
       if (res.ok) {
-        return { success: true, message: data.message || 'Verification code sent to your email.' };
+        return {
+          success: true,
+          message: data.message || 'Verification code sent to your email.',
+          devOtp: data.data?.dev_otp,
+        };
       }
 
       const errMsg = data.error?.message || data.message || 'Failed to send verification code.';
